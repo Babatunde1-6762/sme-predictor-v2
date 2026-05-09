@@ -1,0 +1,6 @@
+Model,Accuracy,F1 — SME class,AUC-ROC
+Logistic Regression,0.6997,0.6315,0.772
+Random Forest,0.7561,0.647,0.8255
+XGBoost,0.7141,0.6563,0.8002
+TensorFlow Neural Network,0.7009,0.6436,0.7874
+PyTorch Neural Network,0.7035,0.6422,0.7862
