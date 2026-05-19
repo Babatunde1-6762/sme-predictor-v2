@@ -673,7 +673,7 @@ with tab6:
                 st.dataframe(batch_results, use_container_width=True)
                 csv_batch = batch_results.to_csv(index=False)
                 st.download_button("📥 Download full analysis report", csv_batch, "sme_readiness_report.csv", "text/csv")
-# ── TAB 7: BARRIER DASHBOARD ────────────────────────────────────────────
+# -- TAB 7: SME PROCUREMENT BARRIER DASHBOARD --------------------------------------------
 with tab7:
     st.subheader("🗺️ SME Procurement Barrier Dashboard")
     st.markdown("Aggregate analysis of procurement accessibility barriers across sectors and regions — the research dashboard for policy insight.")
