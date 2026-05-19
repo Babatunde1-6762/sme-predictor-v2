@@ -695,7 +695,9 @@ with tab7:
     finding2_worst= sector_df2.nsmallest(1,"Rate").iloc[0]
     finding3_gap  = (region_df2["Rate"].max() - region_df2["Rate"].min()) * 100
     col_f1, col_f2, col_f3 = st.columns(3)
-    with col_f1:
+    col_f1, col_f2, col_f3 = st.columns(3)
+
+with col_f1:
     st.error(
         f"**Finding 1 — Structural Barrier**
 
@@ -704,7 +706,8 @@ with tab7:
         f"confirming that low predicted win probability is a rational reason "
         f"for SME non-participation."
     )
-    with col_f2:
+
+with col_f2:
     st.warning(
         f"**Finding 2 — Sector Inequality**
 
@@ -715,7 +718,8 @@ with tab7:
         f"({finding2_worst['Industry']}: {finding2_worst['Rate']*100:.1f}%) "
         f"shows significant structural imbalance."
     )
-  with col_f3:
+
+with col_f3:
     st.info(
         f"**Finding 3 — Regional Inequality**
 
@@ -724,6 +728,7 @@ with tab7:
         f"is {finding3_gap:.1f} percentage points, signalling uneven procurement "
         f"opportunity across geographic areas."
     )
+
     st.divider()
     col_l, col_r = st.columns(2)
     with col_l:
