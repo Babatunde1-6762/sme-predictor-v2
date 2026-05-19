@@ -696,17 +696,34 @@ with tab7:
     finding3_gap  = (region_df2["Rate"].max() - region_df2["Rate"].min()) * 100
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1:
-        st.error(f"**Finding 1 — Structural Barrier**
+    st.error(
+        f"**Finding 1 — Structural Barrier**
 
-{finding1_pct:.0f}% of regions show SME award rates below 50%, confirming that low predicted win probability is a rational reason for SME non-participation.")
+"
+        f"{finding1_pct:.0f}% of regions show SME award rates below 50%, "
+        f"confirming that low predicted win probability is a rational reason "
+        f"for SME non-participation."
+    )
     with col_f2:
-        st.warning(f"**Finding 2 — Sector Inequality**
+    st.warning(
+        f"**Finding 2 — Sector Inequality**
 
-The gap between the most SME-friendly sector ({finding2_best['Industry']}: {finding2_best['Rate']*100:.1f}%) and least ({finding2_worst['Industry']}: {finding2_worst['Rate']*100:.1f}%) shows significant structural imbalance.")
-    with col_f3:
-        st.info(f"**Finding 3 — Regional Inequality**
+"
+        f"The gap between the most SME‑friendly sector "
+        f"({finding2_best['Industry']}: {finding2_best['Rate']*100:.1f}%) "
+        f"and the least accessible sector "
+        f"({finding2_worst['Industry']}: {finding2_worst['Rate']*100:.1f}%) "
+        f"shows significant structural imbalance."
+    )
+  with col_f3:
+    st.info(
+        f"**Finding 3 — Regional Inequality**
 
-A {finding3_gap:.1f}% gap between highest and lowest regional SME rates indicates significant geographic inequality in procurement accessibility.")
+"
+        f"The difference between the highest and lowest regional SME award rate "
+        f"is {finding3_gap:.1f} percentage points, signalling uneven procurement "
+        f"opportunity across geographic areas."
+    )
     st.divider()
     col_l, col_r = st.columns(2)
     with col_l:
