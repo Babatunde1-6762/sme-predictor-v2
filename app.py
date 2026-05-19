@@ -679,74 +679,84 @@ with tab7:
     st.subheader("🗺️ SME Procurement Barrier Dashboard")
     st.markdown("Aggregate analysis of procurement accessibility barriers across sectors and regions — the research dashboard for policy insight.")
     st.divider()
-    col1,col2,col3 = st.columns(3)
+
+    col1, col2, col3 = st.columns(3)
     col1.metric("Global SME award rate", f"{rates['global_sme_rate']*100:.1f}%")
+
     global_r = rates["global_sme_rate"]
     region_df2 = pd.DataFrame(list(rates["region_sme_rate"].items()), columns=["Region","Rate"])
     sector_df2 = pd.DataFrame(list(rates["cpv_sme_rate"].items()), columns=["CPV Code","Rate"])
     sector_df2["Industry"] = sector_df2["CPV Code"].apply(cpv_to_industry)
+
     pct_below = (region_df2["Rate"] < global_r * 0.8).mean() * 100
     col2.metric("Regions significantly below average", f"{pct_below:.0f}%")
     col3.metric("Inequality gap (highest vs lowest region)", f"{(region_df2['Rate'].max()-region_df2['Rate'].min())*100:.1f}%")
+
     st.divider()
     st.markdown("### 📊 Key Research Findings")
+
     finding1_pct = (region_df2["Rate"] < 0.5).mean() * 100
     finding2_best = sector_df2.nlargest(1,"Rate").iloc[0]
-    finding2_worst= sector_df2.nsmallest(1,"Rate").iloc[0]
+    finding2_worst = sector_df2.nsmallest(1,"Rate").iloc[0]
     finding3_gap  = (region_df2["Rate"].max() - region_df2["Rate"].min()) * 100
+
     col_f1, col_f2, col_f3 = st.columns(3)
-    col_f1, col_f2, col_f3 = st.columns(3)
 
-with col_f1:
-    st.error(
-        f"**Finding 1 — Structural Barrier**
-
-"
-        f"{finding1_pct:.0f}% of regions show SME award rates below 50%, "
-        f"confirming that low predicted win probability is a rational reason "
-        f"for SME non-participation."
-    )
-
-with col_f2:
-    st.warning(
-        f"**Finding 2 — Sector Inequality**
+    with col_f1:
+        st.error(
+            f"**Finding 1 — Structural Barrier**
 
 "
-        f"The gap between the most SME‑friendly sector "
-        f"({finding2_best['Industry']}: {finding2_best['Rate']*100:.1f}%) "
-        f"and the least accessible sector "
-        f"({finding2_worst['Industry']}: {finding2_worst['Rate']*100:.1f}%) "
-        f"shows significant structural imbalance."
-    )
+            f"{finding1_pct:.0f}% of regions show SME award rates below 50%, "
+            f"confirming that low predicted win probability is a rational reason "
+            f"for SME non-participation."
+        )
 
-with col_f3:
-    st.info(
-        f"**Finding 3 — Regional Inequality**
+    with col_f2:
+        st.warning(
+            f"**Finding 2 — Sector Inequality**
 
 "
-        f"The difference between the highest and lowest regional SME award rate "
-        f"is {finding3_gap:.1f} percentage points, signalling uneven procurement "
-        f"opportunity across geographic areas."
-    )
+            f"The gap between the most SME‑friendly sector "
+            f"({finding2_best['Industry']}: {finding2_best['Rate']*100:.1f}%) "
+            f"and the least accessible sector "
+            f"({finding2_worst['Industry']}: {finding2_worst['Rate']*100:.1f}%) "
+            f"shows significant structural imbalance."
+        )
+
+    with col_f3:
+        st.info(
+            f"**Finding 3 — Regional Inequality**
+
+"
+            f"The difference between the highest and lowest regional SME award rate "
+            f"is {finding3_gap:.1f} percentage points, signalling uneven procurement "
+            f"opportunity across geographic areas."
+        )
 
     st.divider()
+
     col_l, col_r = st.columns(2)
+
     with col_l:
         st.markdown("**Regional accessibility ranking (highest to lowest):**")
         rdf_sorted = region_df2.sort_values("Rate", ascending=False).copy()
-        rdf_sorted["SME Rate"]   = rdf_sorted["Rate"].apply(lambda x: f"{x*100:.1f}%")
-        rdf_sorted["Status"]     = rdf_sorted["Rate"].apply(lambda x: "✅ Above average" if x >= global_r else "❌ Below average")
+        rdf_sorted["SME Rate"] = rdf_sorted["Rate"].apply(lambda x: f"{x*100:.1f}%")
+        rdf_sorted["Status"] = rdf_sorted["Rate"].apply(lambda x: "✅ Above average" if x >= global_r else "❌ Below average")
         rdf_sorted["Barrier Level"] = rdf_sorted["Rate"].apply(lambda x: "Low" if x >= global_r*1.1 else "Medium" if x >= global_r*0.9 else "High")
         st.dataframe(rdf_sorted[["Region","SME Rate","Status","Barrier Level"]], use_container_width=True)
+
     with col_r:
         st.markdown("**Sector accessibility ranking (highest to lowest):**")
         sdf_sorted = sector_df2.sort_values("Rate", ascending=False).copy()
-        sdf_sorted["SME Rate"]      = sdf_sorted["Rate"].apply(lambda x: f"{x*100:.1f}%")
-        sdf_sorted["Status"]        = sdf_sorted["Rate"].apply(lambda x: "✅ Above average" if x >= global_r else "❌ Below average")
+        sdf_sorted["SME Rate"] = sdf_sorted["Rate"].apply(lambda x: f"{x*100:.1f}%")
+        sdf_sorted["Status"] = sdf_sorted["Rate"].apply(lambda x: "✅ Above average" if x >= global_r else "❌ Below average")
         sdf_sorted["Barrier Level"] = sdf_sorted["Rate"].apply(lambda x: "Low" if x >= global_r*1.1 else "Medium" if x >= global_r*0.9 else "High")
         st.dataframe(sdf_sorted[["Industry","SME Rate","Status","Barrier Level"]].head(20), use_container_width=True)
+
     st.divider()
     st.markdown("### 📋 Policy Insight Report")
+
     st.markdown(f"""
 **AI-Driven Analysis of SME Procurement Participation Barriers — Key Conclusions**
 
