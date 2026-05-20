@@ -678,17 +678,17 @@ with tab7:
     st.markdown("### 📊 Key Research Findings")
     col_f1,col_f2,col_f3 = st.columns(3)
     with col_f1:
-        st.error(f"**Finding 1 — Structural Barrier**
-
-{finding1_pct:.0f}% of regions show SME award rates below 50%, confirming that low predicted win probability is a rational reason for SME non-participation.")
+        f1_text = f"{finding1_pct:.0f}% of regions show SME award rates below 50%, confirming that low predicted win probability is a rational reason for SME non-participation."
+        st.error("**Finding 1 — Structural Barrier**")
+        st.error(f1_text)
     with col_f2:
-        st.warning(f"**Finding 2 — Sector Inequality**
-
-Gap between most accessible sector ({finding2_best['Industry']}: {finding2_best['Rate']*100:.1f}%) and least ({finding2_worst['Industry']}: {finding2_worst['Rate']*100:.1f}%) shows structural imbalance.")
+        f2_text = f"Gap between most accessible sector ({finding2_best['Industry']}: {finding2_best['Rate']*100:.1f}%) and least ({finding2_worst['Industry']}: {finding2_worst['Rate']*100:.1f}%) shows structural imbalance."
+        st.warning("**Finding 2 — Sector Inequality**")
+        st.warning(f2_text)
     with col_f3:
-        st.info(f"**Finding 3 — Regional Inequality**
-
-A {finding3_gap:.1f}% gap between highest and lowest regional SME rates signals uneven procurement opportunity.")
+        f3_text = f"A {finding3_gap:.1f}% gap between highest and lowest regional SME rates signals uneven procurement opportunity."
+        st.info("**Finding 3 — Regional Inequality**")
+        st.info(f3_text)
     st.divider()
     col_l, col_r = st.columns(2)
     with col_l:
