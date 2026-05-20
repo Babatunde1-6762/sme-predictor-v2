@@ -720,19 +720,17 @@ with tab7:
 
 5. **Policy recommendation:** Targeted interventions in highest-barrier sectors and regions, combined with simplified procurement frameworks and lower-value contract splitting, would most improve SME participation rates.
     """)
-    report_text = (
-        f"SME Procurement Barrier Analysis
-"
-        f"Generated: {datetime.now().strftime('%Y-%m-%d')}
+generated   = datetime.now().strftime('%Y-%m-%d')
+    global_str  = f"{global_r*100:.1f}%"
+    below_str   = f"{pct_below:.0f}%"
+    gap_str     = f"{finding3_gap:.1f}%"
+    report_text = "SME Procurement Barrier Analysis
+Generated: " + generated + "
 
+Global SME rate: " + global_str + "
+Regions below average: " + below_str + "
+Inequality gap: " + gap_str + "
 "
-        f"Global SME rate: {global_r*100:.1f}%
-"
-        f"Regions below average: {pct_below:.0f}%
-"
-        f"Inequality gap: {finding3_gap:.1f}%
-"
-    )
     st.download_button("📥 Download policy insight report", report_text, "policy_insight_report.txt", "text/plain")
 
 with st.sidebar:
