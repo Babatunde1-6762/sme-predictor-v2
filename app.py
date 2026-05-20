@@ -6,7 +6,6 @@ import json
 import requests
 from datetime import datetime, timedelta
 
-# ── CPV LOOKUP ───────────────────────────────────────────────────────────────
 CPV_LOOKUP = {
     "45000000":"Construction","45100000":"Site preparation work",
     "45200000":"Building construction","45300000":"Building installation works",
@@ -80,14 +79,14 @@ def load_artefacts():
 
 @st.cache_data(ttl=3600)
 def fetch_live_contracts(days_back=7, max_results=50):
-    date_from     = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
-    date_to       = datetime.now().strftime("%Y-%m-%d")
+    date_from = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+    date_to   = datetime.now().strftime("%Y-%m-%d")
     all_contracts = []
     headers = {
         "User-Agent": "Mozilla/5.0 (compatible; SMEResearchBot/1.0)",
-        "Accept":     "application/json",
+        "Accept": "application/json",
         "Content-Type": "application/json",
-        "Origin":  "https://www.contractsfinder.service.gov.uk",
+        "Origin": "https://www.contractsfinder.service.gov.uk",
         "Referer": "https://www.contractsfinder.service.gov.uk/",
     }
     try:
@@ -115,9 +114,13 @@ def fetch_live_contracts(days_back=7, max_results=50):
     except Exception:
         pass
     try:
-        fat_headers = {**headers,"Origin":"https://www.find-tender.service.gov.uk","Referer":"https://www.find-tender.service.gov.uk/"}
+        fat_headers = {**headers,
+                       "Origin":"https://www.find-tender.service.gov.uk",
+                       "Referer":"https://www.find-tender.service.gov.uk/"}
         fat_url = "https://www.find-tender.service.gov.uk/api/1.0/ocds/notices/list"
-        fat_r = requests.get(fat_url, params={"publishedFrom":date_from,"publishedTo":date_to,"limit":max_results,"offset":0}, headers=fat_headers, timeout=25)
+        fat_r = requests.get(fat_url,
+                             params={"publishedFrom":date_from,"publishedTo":date_to,"limit":max_results,"offset":0},
+                             headers=fat_headers, timeout=25)
         if fat_r.status_code == 200:
             records = fat_r.json().get("records", fat_r.json().get("releases",[]))
             for rec in records:
@@ -144,13 +147,16 @@ def fetch_live_contracts(days_back=7, max_results=50):
     if not all_contracts:
         import random
         random.seed(int(datetime.now().timestamp()) % 1000)
-        sectors = [("IT services","72000000"),("Construction","45000000"),("Cleaning services","90600000"),
-                   ("Training services","80500000"),("Health services","85100000"),("Accounting services","79200000"),
+        sectors = [("IT services","72000000"),("Construction","45000000"),
+                   ("Cleaning services","90600000"),("Training services","80500000"),
+                   ("Health services","85100000"),("Accounting services","79200000"),
                    ("Transport services","60000000"),("Legal services","79100000"),
                    ("Repair and maintenance","50000000"),("Environmental services","90700000")]
-        buyers_cf  = ["NHS Trust","Local Council","Ministry of Justice","Department for Education","HMRC","Home Office","Environment Agency"]
-        buyers_fat = ["Cabinet Office","MOD","DVLA","Companies House","Crown Commercial Service","UKRI","Innovate UK"]
-        regions    = ["London","South East","North West","Yorkshire and the Humber","East Midlands","West Midlands","East of England","South West","North East","Wales","Scotland"]
+        buyers_cf  = ["NHS Trust","Local Council","Ministry of Justice","HMRC","Home Office"]
+        buyers_fat = ["Cabinet Office","MOD","DVLA","Crown Commercial Service","UKRI"]
+        regions    = ["London","South East","North West","Yorkshire and the Humber",
+                      "East Midlands","West Midlands","East of England","South West",
+                      "North East","Wales","Scotland"]
         for i in range(min(max_results, 30)):
             sname, cpv = random.choice(sectors)
             source = "Contracts Finder" if i % 2 == 0 else "Find a Tender"
@@ -159,10 +165,14 @@ def fetch_live_contracts(days_back=7, max_results=50):
             pub_dt = datetime.now() - timedelta(days=random.randint(0, days_back))
             ddl_dt = pub_dt + timedelta(days=random.randint(14, 60))
             all_contracts.append({
-                "source":source,"title":f"{sname} Services Contract 2026{i:03d}",
-                "buyer":random.choice(buyers),"value":value,"cpv_code":cpv,
-                "region":random.choice(regions),"deadline":ddl_dt.strftime("%Y-%m-%d"),
-                "published":pub_dt.strftime("%Y-%m-%dT%H:%M:%S"),"url":"",
+                "source":source,
+                "title":sname + " Services Contract 2026" + str(i).zfill(3),
+                "buyer":random.choice(buyers),
+                "value":value,"cpv_code":cpv,
+                "region":random.choice(regions),
+                "deadline":ddl_dt.strftime("%Y-%m-%d"),
+                "published":pub_dt.strftime("%Y-%m-%dT%H:%M:%S"),
+                "url":"",
             })
     df = pd.DataFrame(all_contracts)
     df = df.drop_duplicates(subset=["title","buyer"], keep="first")
@@ -174,7 +184,7 @@ def build_row(cv, am, aq, region, cpv, encoders, feature_cols, rates, scaler):
     vbnum  = 0 if cv<10000 else 1 if cv<50000 else 2 if cv<100000 else 3 if cv<500000 else 4
     is_qe  = int(aq in [1,4])
     is_hv  = int(cv > 100000)
-    cr     = rates["cpv_sme_rate"].get(str(cpv),    rates["global_sme_rate"])
+    cr     = rates["cpv_sme_rate"].get(str(cpv), rates["global_sme_rate"])
     rr     = rates["region_sme_rate"].get(str(region), rates["global_sme_rate"])
     r_enc  = encoders.get("region",   {}).get(str(region), 0)
     c_enc  = encoders.get("cpv_code", {}).get(str(cpv), 0)
@@ -204,33 +214,49 @@ def score_contracts(df, encoders, feature_cols, rates, scaler, rf, xgb, lr):
             probs.append(rates["global_sme_rate"])
     return probs
 
-def get_accessibility_scores(p_ens):
-    accessibility   = round(p_ens * 100, 1)
-    confidence      = round((1 - abs(p_ens - 0.5) * 2) * 100, 1) if p_ens < 0.5 else round(p_ens * 100, 1)
-    bid_feasibility = round(min(100, p_ens * 120) * 100, 1) / 100
-    return accessibility, confidence, bid_feasibility
+def get_accessibility_scores(p):
+    acc  = round(p * 100, 1)
+    conf = round((1 - abs(p - 0.5) * 2) * 100, 1) if p < 0.5 else round(p * 100, 1)
+    bid  = round(min(100, p * 120) * 100, 1) / 100
+    return acc, conf, bid
 
-def explain_prediction(p_ens, cv, cpv, region, rates):
+def explain_prediction(p, cv, cpv, region, rates):
     reasons = []
     cr = rates["cpv_sme_rate"].get(str(cpv), rates["global_sme_rate"])
     rr = rates["region_sme_rate"].get(str(region), rates["global_sme_rate"])
-    global_rate = rates["global_sme_rate"]
+    gr = rates["global_sme_rate"]
     if cv > 150000:
-        reasons.append(("High contract value", f"At £{cv:,.0f}, this contract exceeds the threshold where SMEs typically win. Large contracts favour established suppliers.", "negative"))
-    if cr < global_rate * 0.8:
-        reasons.append(("Sector disadvantage", f"The {cpv_to_industry(cpv)} sector has a {cr*100:.1f}% SME award rate — below the national average of {global_rate*100:.1f}%. This sector is dominated by larger suppliers.", "negative"))
-    if rr < global_rate * 0.8:
-        reasons.append(("Regional disadvantage", f"The {region} region has a {rr*100:.1f}% SME award rate. Regional procurement patterns here are less favourable for SMEs.", "negative"))
+        reasons.append(("High contract value",
+                         "At £" + "{:,.0f}".format(cv) + ", this exceeds the threshold where SMEs typically win. Large contracts favour established suppliers.",
+                         "negative"))
+    if cr < gr * 0.8:
+        reasons.append(("Sector disadvantage",
+                         cpv_to_industry(cpv) + " sector has a " + "{:.1f}".format(cr*100) + "% SME award rate — below the national average of " + "{:.1f}".format(gr*100) + "%. This sector is dominated by larger suppliers.",
+                         "negative"))
+    if rr < gr * 0.8:
+        reasons.append(("Regional disadvantage",
+                         region + " has a " + "{:.1f}".format(rr*100) + "% SME award rate. Regional procurement patterns here are less favourable for SMEs.",
+                         "negative"))
     if cv > 100000:
-        reasons.append(("Value mismatch", "Contracts above £100,000 have significantly lower SME win rates. SMEs are more competitive at lower contract values.", "negative"))
-    if cr > global_rate * 1.1:
-        reasons.append(("Sector advantage", f"The {cpv_to_industry(cpv)} sector has a {cr*100:.1f}% SME award rate — above the national average. This sector is SME-friendly.", "positive"))
-    if rr > global_rate * 1.1:
-        reasons.append(("Regional advantage", f"The {region} region has a {rr*100:.1f}% SME award rate — above average. This region has a strong SME procurement culture.", "positive"))
+        reasons.append(("Value mismatch",
+                         "Contracts above £100,000 have significantly lower SME win rates. SMEs are more competitive at lower contract values.",
+                         "negative"))
+    if cr > gr * 1.1:
+        reasons.append(("Sector advantage",
+                         cpv_to_industry(cpv) + " sector has a " + "{:.1f}".format(cr*100) + "% SME award rate — above the national average. This sector is SME-friendly.",
+                         "positive"))
+    if rr > gr * 1.1:
+        reasons.append(("Regional advantage",
+                         region + " has a " + "{:.1f}".format(rr*100) + "% SME award rate — above average. This region has a strong SME procurement culture.",
+                         "positive"))
     if cv < 50000:
-        reasons.append(("Value advantage", f"At £{cv:,.0f}, this is within the contract value range where SMEs are most competitive.", "positive"))
+        reasons.append(("Value advantage",
+                         "At £" + "{:,.0f}".format(cv) + ", this is within the contract value range where SMEs are most competitive.",
+                         "positive"))
     if not reasons:
-        reasons.append(("Average conditions", "This contract has typical procurement characteristics. Win probability reflects the baseline SME award rate for this sector and region.", "neutral"))
+        reasons.append(("Average conditions",
+                         "This contract has typical procurement characteristics. Win probability reflects the baseline SME award rate for this sector and region.",
+                         "neutral"))
     return reasons
 
 def gap_analysis(cv, cpv, region, encoders, feature_cols, rates, scaler, rf, xgb, lr):
@@ -241,23 +267,23 @@ def gap_analysis(cv, cpv, region, encoders, feature_cols, rates, scaler, rf, xgb
         return get_ensemble(r, rf, xgb, lr)
     base = gp(cv, cpv, region)
     sugg = []
-    for test_cv, label in [(cv*0.5, f"Target 50% smaller contract (£{cv*0.5:,.0f})"),
-                            (cv*0.25,f"Target 75% smaller contract (£{cv*0.25:,.0f})"),
+    for test_cv, label in [(cv*0.5, "Target 50% smaller contract (£" + "{:,.0f}".format(cv*0.5) + ")"),
+                            (cv*0.25,"Target 75% smaller contract (£" + "{:,.0f}".format(cv*0.25) + ")"),
                             (25000,  "Target £25,000 contract — highest SME success range")]:
-        p = gp(test_cv, cpv, region)
-        if p > base:
-            sugg.append(("Contract Size", label, round(p,3), round(p-base,3),
+        p2 = gp(test_cv, cpv, region)
+        if p2 > base:
+            sugg.append(("Contract Size", label, round(p2,3), round(p2-base,3),
                           "Smaller contracts have significantly higher SME win rates. Building a track record at smaller values improves future competitiveness."))
     best_reg = max(rates["region_sme_rate"], key=rates["region_sme_rate"].get)
     p_br = gp(cv, cpv, best_reg)
     if p_br > base:
-        sugg.append(("Region Strategy", f"Target {best_reg} region", round(p_br,3), round(p_br-base,3),
-                      f"{best_reg} has the highest SME award rate nationally. Expanding geographic reach to this region significantly improves win probability."))
+        sugg.append(("Region Strategy", "Target " + best_reg + " region", round(p_br,3), round(p_br-base,3),
+                      best_reg + " has the highest SME award rate nationally."))
     best_cpv = max(rates["cpv_sme_rate"], key=rates["cpv_sme_rate"].get)
     p_bc = gp(cv, best_cpv, region)
     if p_bc > base:
-        sugg.append(("Sector Pivot", f"Consider {cpv_to_industry(best_cpv)}", round(p_bc,3), round(p_bc-base,3),
-                      f"{cpv_to_industry(best_cpv)} has the highest SME win rate. If the SME has adjacent capabilities, expanding into this sector would be strategically beneficial."))
+        sugg.append(("Sector Pivot", "Consider " + cpv_to_industry(best_cpv), round(p_bc,3), round(p_bc-base,3),
+                      cpv_to_industry(best_cpv) + " has the highest SME win rate historically."))
     return base, sorted(sugg, key=lambda x: x[3], reverse=True)
 
 def analyse_sme_batch(sme_df, encoders, feature_cols, rates, scaler, rf, xgb, lr):
@@ -274,11 +300,11 @@ def analyse_sme_batch(sme_df, encoders, feature_cols, rates, scaler, rf, xgb, lr
             p_xgb = xgb.predict_proba(r)[0][1]
             p_lr  = lr.predict_proba(r)[0][1]
             p_ens = p_rf*0.5 + p_xgb*0.35 + p_lr*0.15
-            acc, conf, bid_feas = get_accessibility_scores(p_ens)
+            acc, conf, bid = get_accessibility_scores(p_ens)
             reasons = explain_prediction(p_ens, cv, cpv, reg, rates)
             barrier = ", ".join([x[0] for x in reasons if x[2]=="negative"]) or "None identified"
             results.append({
-                "sme_name":            sme.get("sme_name", f"SME_{idx}"),
+                "sme_name":            sme.get("sme_name", "SME_" + str(idx)),
                 "sector":              sme.get("sector", cpv_to_industry(cpv)),
                 "region":              reg,
                 "contract_value":      cv,
@@ -286,19 +312,17 @@ def analyse_sme_batch(sme_df, encoders, feature_cols, rates, scaler, rf, xgb, lr
                 "win_probability":     round(p_ens, 3),
                 "accessibility_score": acc,
                 "confidence_index":    conf,
-                "bid_feasibility":     bid_feas,
+                "bid_feasibility":     bid,
                 "prediction":          "Likely to win" if p_ens >= 0.5 else "Unlikely to win",
                 "primary_barrier":     barrier,
-                "recommendation":      "Apply — competitive" if p_ens >= 0.6 else
-                                       "Consider applying"   if p_ens >= 0.4 else
-                                       "Needs preparation",
+                "recommendation":      "Apply" if p_ens >= 0.6 else "Consider" if p_ens >= 0.4 else "Needs preparation",
             })
         except Exception:
             pass
     return pd.DataFrame(results)
 
 rf, xgb, lr, scaler, encoders, feature_cols, rates, best_name, best_auc = load_artefacts()
-all_cpv_codes  = list(encoders.get("cpv_code", {"Unknown":0}).keys())
+all_cpv_codes  = list(encoders.get('cpv_code', {'Unknown':0}).keys())
 all_industries = sorted(set(CPV_LOOKUP.values()))
 
 MODEL_MAP = {
@@ -311,327 +335,305 @@ best_label, _ = MODEL_MAP.get(best_name, ("Random Forest", rf))
 model_options = []
 for opt in ["Random Forest","XGBoost","Logistic Regression"]:
     if opt == best_label:
-        auc_str = f" — AUC {best_auc:.3f}" if best_auc else ""
-        model_options.append(f"{opt} ⭐ Recommended{auc_str}")
+        auc_str = " — AUC " + "{:.3f}".format(best_auc) if best_auc else ""
+        model_options.append(opt + " Recommended" + auc_str)
     else:
         model_options.append(opt)
-default_index = next((i for i,o in enumerate(model_options) if "⭐" in o), 0)
+default_index = next((i for i,o in enumerate(model_options) if "Recommended" in o), 0)
 
-st.set_page_config(page_title="SME Procurement Accessibility Intelligence", page_icon="🏆", layout="wide")
-st.title("🏆 AI-Driven SME Procurement Accessibility Intelligence Platform")
+st.set_page_config(page_title="SME Procurement Intelligence", page_icon="trophy", layout="wide")
+st.title("SME Procurement Accessibility Intelligence Platform")
 st.markdown("Explainable AI revealing structural barriers affecting SME participation in UK public procurement.")
 if best_auc:
-    st.success(f"🏆 Best model: **{best_label}**  |  AUC-ROC: **{best_auc:.4f}**  — set as default")
+    st.success("Best model: " + best_label + "  |  AUC-ROC: " + "{:.4f}".format(best_auc))
 st.divider()
 
 tab1,tab2,tab3,tab4,tab5,tab6,tab7 = st.tabs([
-    "🔮 Win Probability",
-    "📊 Barrier & Gap Analysis",
-    "📡 Live Contracts",
-    "🏭 CPV Lookup",
-    "📈 Historical",
-    "🏢 SME Readiness",
-    "🗺️ Barrier Dashboard",
+    "Win Probability",
+    "Barrier and Gap Analysis",
+    "Live Contracts",
+    "CPV Lookup",
+    "Historical",
+    "SME Readiness",
+    "Barrier Dashboard",
 ])
 
 with tab1:
-    st.subheader("🔮 Will this SME win the contract?")
-    st.markdown("Predicts win probability and provides a full explainability breakdown of why the SME is likely or unlikely to succeed.")
+    st.subheader("Will this SME win the contract?")
     c1, c2 = st.columns(2)
     with c1:
-        cv1 = st.number_input("Contract value (£)", min_value=0.0, value=50000.0, step=1000.0, key="cv1")
+        cv1 = st.number_input("Contract value", min_value=0.0, value=50000.0, step=1000.0, key="cv1")
         am1 = st.selectbox("Award month", list(range(1,13)),
                            format_func=lambda m:["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][m-1], key="am1")
-        aq1 = st.selectbox("Award quarter", [1,2,3,4], format_func=lambda q:f"Q{q}", key="aq1")
+        aq1 = st.selectbox("Award quarter", [1,2,3,4], format_func=lambda q:"Q"+str(q), key="aq1")
         mc  = st.selectbox("Model", model_options, index=default_index, key="mc1")
     with c2:
         r1   = st.selectbox("Region", list(encoders.get("region",{"Unknown":0}).keys()), key="r1")
         inp1 = st.radio("CPV input method", ["Select CPV code","Select by industry"], key="im1", horizontal=True)
         if inp1 == "Select CPV code":
             cp1 = st.selectbox("CPV code", all_cpv_codes, key="cp1a")
-            st.caption(f"Industry: **{cpv_to_industry(cp1)}**")
+            st.caption("Industry: " + cpv_to_industry(cp1))
         else:
             ind1 = st.selectbox("Industry", all_industries, key="ind1")
             cp1  = st.selectbox("CPV code (from industry)", INDUSTRY_LOOKUP.get(ind1,["Unknown"]), key="cp1b")
-    if st.button("🔮 Predict win probability", type="primary", use_container_width=True, key="btn1"):
+    if st.button("Predict win probability", type="primary", use_container_width=True, key="btn1"):
         row1, cr1, rr1 = build_row(cv1, am1, aq1, r1, cp1, encoders, feature_cols, rates, scaler)
         p_rf1  = rf.predict_proba(row1)[0][1]
         p_xgb1 = xgb.predict_proba(row1)[0][1]
         p_lr1  = lr.predict_proba(row1)[0][1]
         p_ens1 = p_rf1*0.5 + p_xgb1*0.35 + p_lr1*0.15
-        pred1  = int(p_ens1 >= 0.5)
         acc1, conf1, bid1 = get_accessibility_scores(p_ens1)
         a,b,c,d = st.columns(4)
-        a.metric("Win Probability",           f"{p_ens1*100:.1f}%")
-        b.metric("Procurement Accessibility", f"{acc1:.1f}%")
-        c.metric("SME Confidence Index",      f"{conf1:.1f}%")
-        d.metric("Bid Feasibility Score",     f"{bid1:.2f}")
+        a.metric("Win Probability",           "{:.1f}%".format(p_ens1*100))
+        b.metric("Procurement Accessibility", "{:.1f}%".format(acc1))
+        c.metric("SME Confidence Index",      "{:.1f}%".format(conf1))
+        d.metric("Bid Feasibility Score",     "{:.2f}".format(bid1))
         st.progress(float(p_ens1))
-        if pred1:
-            st.success("✅ This SME has a good chance. Applying is strongly recommended.")
+        if p_ens1 >= 0.5:
+            st.success("This SME has a good chance. Applying is strongly recommended.")
         elif p_ens1 >= 0.35:
-            st.warning("⚠️ Borderline probability. With preparation this SME could compete. See Barrier & Gap Analysis tab.")
+            st.warning("Borderline probability. With preparation this SME could compete.")
         else:
-            st.error("❌ Low win probability. This confirms why SMEs in this category hesitate to apply. See Barrier & Gap Analysis tab.")
+            st.error("Low win probability. This confirms why SMEs in this category hesitate to apply.")
         st.divider()
-        st.markdown("### 🔍 Explainability — Why is this the prediction?")
+        st.markdown("### Explainability — Why is this the prediction?")
         reasons = explain_prediction(p_ens1, cv1, cp1, r1, rates)
-        for reason_name, explanation, direction in reasons:
-            if direction == "negative":
-                st.error(f"**❌ {reason_name}:** {explanation}")
-            elif direction == "positive":
-                st.success(f"**✅ {reason_name}:** {explanation}")
-            else:
-                st.info(f"**ℹ️ {reason_name}:** {explanation}")
+        for rname, rexpl, rdir in reasons:
+            if rdir == "negative":   st.error("**" + rname + ":** " + rexpl)
+            elif rdir == "positive": st.success("**" + rname + ":** " + rexpl)
+            else:                    st.info("**" + rname + ":** " + rexpl)
         st.divider()
         st.markdown("**Individual model contributions:**")
         col1,col2,col3,col4 = st.columns(4)
-        col1.metric("Random Forest (50%)", f"{p_rf1*100:.1f}%")
-        col2.metric("XGBoost (35%)",        f"{p_xgb1*100:.1f}%")
-        col3.metric("Logistic Reg (15%)",   f"{p_lr1*100:.1f}%")
-        col4.metric("Ensemble (final)",     f"{p_ens1*100:.1f}%")
-        st.info(f"Industry: **{cpv_to_industry(cp1)}**  |  Sector SME rate: {cr1*100:.1f}%  |  Region SME rate: {rr1*100:.1f}%")
+        col1.metric("Random Forest (50%)", "{:.1f}%".format(p_rf1*100))
+        col2.metric("XGBoost (35%)",       "{:.1f}%".format(p_xgb1*100))
+        col3.metric("Logistic Reg (15%)",  "{:.1f}%".format(p_lr1*100))
+        col4.metric("Ensemble (final)",    "{:.1f}%".format(p_ens1*100))
+        st.info("Industry: " + cpv_to_industry(cp1) + "  |  Sector SME rate: " + "{:.1f}%".format(cr1*100) + "  |  Region SME rate: " + "{:.1f}%".format(rr1*100))
 
 with tab2:
-    st.subheader("📊 Barrier & Capability Gap Analysis")
-    st.markdown("Identifies structural barriers preventing SMEs from winning contracts and provides actionable recommendations to improve competitiveness.")
+    st.subheader("Barrier and Capability Gap Analysis")
     c1, c2 = st.columns(2)
     with c1:
-        cv2 = st.number_input("Contract value (£)", min_value=0.0, value=200000.0, step=1000.0, key="cv2")
+        cv2 = st.number_input("Contract value", min_value=0.0, value=200000.0, step=1000.0, key="cv2")
         r2  = st.selectbox("Region", list(encoders.get("region",{"Unknown":0}).keys()), key="r2")
     with c2:
         inp2 = st.radio("CPV input method", ["Select CPV code","Select by industry"], key="im2", horizontal=True)
         if inp2 == "Select CPV code":
             cp2 = st.selectbox("CPV code", all_cpv_codes, key="cp2a")
-            st.caption(f"Industry: **{cpv_to_industry(cp2)}**")
+            st.caption("Industry: " + cpv_to_industry(cp2))
         else:
             ind2 = st.selectbox("Industry", all_industries, key="ind2")
             cp2  = st.selectbox("CPV code (from industry)", INDUSTRY_LOOKUP.get(ind2,["Unknown"]), key="cp2b")
-    if st.button("📊 Run barrier and gap analysis", type="primary", use_container_width=True, key="btn2"):
+    if st.button("Run barrier and gap analysis", type="primary", use_container_width=True, key="btn2"):
         base_prob, suggestions = gap_analysis(cv2, cp2, r2, encoders, feature_cols, rates, scaler, rf, xgb, lr)
         acc2, conf2, bid2 = get_accessibility_scores(base_prob)
         col1,col2,col3,col4 = st.columns(4)
-        col1.metric("Current win probability",    f"{base_prob*100:.1f}%")
-        col2.metric("Procurement Accessibility",  f"{acc2:.1f}%")
-        col3.metric("SME Confidence Index",       f"{conf2:.1f}%")
-        col4.metric("Bid Feasibility",            f"{bid2:.2f}")
+        col1.metric("Win probability",           "{:.1f}%".format(base_prob*100))
+        col2.metric("Procurement Accessibility", "{:.1f}%".format(acc2))
+        col3.metric("SME Confidence Index",      "{:.1f}%".format(conf2))
+        col4.metric("Bid Feasibility",           "{:.2f}".format(bid2))
         st.progress(float(base_prob))
         if base_prob < 0.3:
-            st.error(f"❌ Only **{base_prob*100:.1f}%** probability. The model confirms this is a structural participation barrier.")
+            st.error("Only " + "{:.1f}%".format(base_prob*100) + " probability — structural participation barrier confirmed.")
         elif base_prob < 0.5:
-            st.warning(f"⚠️ **{base_prob*100:.1f}%** probability — below threshold. SMEs face a rational economic calculation: bid costs outweigh expected return.")
+            st.warning("{:.1f}%".format(base_prob*100) + " probability — below threshold. Bid costs outweigh expected return.")
         else:
-            st.success(f"✅ **{base_prob*100:.1f}%** probability — above threshold. SMEs should be encouraged to apply.")
+            st.success("{:.1f}%".format(base_prob*100) + " probability — SMEs should be encouraged to apply.")
         st.divider()
-        st.markdown("### ❌ Identified Participation Barriers")
+        st.markdown("### Identified Participation Barriers")
         reasons2 = explain_prediction(base_prob, cv2, cp2, r2, rates)
         barriers_found = [x for x in reasons2 if x[2] == "negative"]
         if barriers_found:
-            for reason_name, explanation, _ in barriers_found:
-                st.error(f"**{reason_name}:** {explanation}")
+            for rname, rexpl, _ in barriers_found:
+                st.error("**" + rname + ":** " + rexpl)
         else:
-            st.success("No significant barriers identified for this contract profile.")
+            st.success("No significant barriers identified.")
         st.divider()
         if suggestions:
-            st.markdown("### 🎯 Capability Gap Recommendations")
+            st.markdown("### Capability Gap Recommendations")
             for category, action, new_prob, improvement, advice in suggestions[:4]:
-                with st.expander(f"💡 {action}  →  {new_prob*100:.1f}%  (+{improvement*100:.1f}%)"):
-                    st.markdown(f"**Category:** {category}")
-                    st.markdown(f"**Recommended action:** {action}")
-                    st.markdown(f"**Strategic rationale:** {advice}")
+                with st.expander(action + "  ->  " + "{:.1f}%".format(new_prob*100) + "  (+" + "{:.1f}%".format(improvement*100) + ")"):
+                    st.markdown("**" + category + ":** " + advice)
                     st.progress(float(new_prob))
-                    col_a, col_b = st.columns(2)
-                    col_a.metric("Current probability",  f"{base_prob*100:.1f}%")
-                    col_b.metric("Improved probability", f"{new_prob*100:.1f}%", delta=f"+{improvement*100:.1f}%")
+                    ca, cb = st.columns(2)
+                    ca.metric("Current",  "{:.1f}%".format(base_prob*100))
+                    cb.metric("Improved", "{:.1f}%".format(new_prob*100), delta="+" + "{:.1f}%".format(improvement*100))
         st.divider()
-        st.markdown("### 📝 Why are SMEs not applying? — Model Evidence")
-        st.markdown(f"For a **{cpv_to_industry(cp2)}** contract worth **£{cv2:,.0f}** in **{r2}**:")
+        st.markdown("### Why are SMEs not applying? — Model Evidence")
         if base_prob < 0.3:
-            st.error("**Model verdict:** With less than 30% predicted probability, SME reluctance is rational and data-driven. The financial cost of bid preparation cannot be justified at this probability level.")
+            st.error("With less than 30% probability, SME reluctance is rational. Bid preparation costs cannot be justified at this probability level.")
         elif base_prob < 0.5:
-            st.warning("**Model verdict:** At 30-50% probability, SMEs face a rational choice: invest resources in a bid with a less-than-even chance of success.")
+            st.warning("At 30-50% probability, SMEs face a rational choice — bid costs outweigh expected returns for many.")
         else:
-            st.success("**Model verdict:** Above 50% probability. SMEs in this category should be actively encouraged to apply.")
+            st.success("Above 50% probability. SMEs should be actively encouraged to apply.")
 
 with tab3:
-    st.subheader("📡 Live UK Government Contracts")
-    st.markdown("Real-time contracts from **Contracts Finder** and **Find a Tender** — both sources running concurrently, each contract scored for SME win probability.")
-    st.info("ℹ️ The UK government APIs restrict access by IP address. When live data is unavailable, a realistic representative sample is generated so prediction functionality always works.")
+    st.subheader("Live UK Government Contracts")
+    st.info("The UK government APIs restrict access by IP address. When live data is unavailable, a representative sample is generated automatically.")
     c1, c2 = st.columns(2)
     with c1:
         days_back = st.slider("Days to look back", 1, 30, 7)
         max_res   = st.selectbox("Max contracts per source", [25,50,100], index=1)
     with c2:
-        filter_region = st.selectbox("Filter by region (optional)", ["All"]+list(encoders.get("region",{"Unknown":0}).keys()))
+        filter_region = st.selectbox("Filter by region", ["All"]+list(encoders.get("region",{"Unknown":0}).keys()))
         min_prob      = st.slider("Minimum SME win probability", 0.0, 1.0, 0.0, 0.05)
-    if st.button("📡 Fetch and score live contracts", type="primary", use_container_width=True):
-        with st.spinner("Fetching from Contracts Finder and Find a Tender simultaneously..."):
+    if st.button("Fetch and score live contracts", type="primary", use_container_width=True):
+        with st.spinner("Fetching from Contracts Finder and Find a Tender..."):
             live_df = fetch_live_contracts(days_back=days_back, max_results=max_res)
-        with st.spinner("Scoring all contracts for SME win probability..."):
+        with st.spinner("Scoring contracts for SME win probability..."):
             live_df["sme_win_probability"] = score_contracts(live_df, encoders, feature_cols, rates, scaler, rf, xgb, lr)
-        live_df["industry"]       = live_df["cpv_code"].apply(cpv_to_industry)
+        live_df["industry"] = live_df["cpv_code"].apply(cpv_to_industry)
         live_df["recommendation"] = live_df["sme_win_probability"].apply(
-            lambda p: "✅ Apply — good chance" if p>=0.6 else "🤔 Consider applying" if p>=0.4 else "❌ Low chance — prepare more")
+            lambda p: "Apply — good chance" if p>=0.6 else "Consider applying" if p>=0.4 else "Low chance — prepare more")
         is_live = any(live_df["url"].str.startswith("http", na=False))
         if is_live:
-            st.success("✅ Live data fetched from UK government portals.")
+            st.success("Live data fetched from UK government portals.")
         else:
-            st.info("📊 Showing representative sample — live APIs currently restricted by IP whitelist.")
+            st.info("Showing representative sample — live APIs currently restricted by IP whitelist.")
         if filter_region != "All":
             live_df = live_df[live_df["region"]==filter_region]
         live_df = live_df[live_df["sme_win_probability"]>=min_prob].sort_values("sme_win_probability", ascending=False).reset_index(drop=True)
         col1,col2,col3,col4,col5 = st.columns(5)
-        col1.metric("Total contracts",  str(len(live_df)))
+        col1.metric("Total",           str(len(live_df)))
         col2.metric("Contracts Finder", str((live_df["source"]=="Contracts Finder").sum()))
         col3.metric("Find a Tender",    str((live_df["source"]=="Find a Tender").sum()))
-        col4.metric("Above 50% chance", str((live_df["sme_win_probability"]>=0.5).sum()))
-        col5.metric("Below 30% chance", str((live_df["sme_win_probability"]<0.3).sum()))
+        col4.metric("Above 50%",        str((live_df["sme_win_probability"]>=0.5).sum()))
+        col5.metric("Below 30%",        str((live_df["sme_win_probability"]<0.3).sum()))
         st.dataframe(
             live_df[["source","title","buyer","value","region","industry","sme_win_probability","recommendation","deadline"]]
             .rename(columns={"sme_win_probability":"SME Win %","source":"Source"}),
             use_container_width=True)
-        csv = live_df.to_csv(index=False)
-        st.download_button("📥 Download as CSV", csv, "live_scored_contracts.csv", "text/csv")
+        st.download_button("Download as CSV", live_df.to_csv(index=False), "live_scored_contracts.csv", "text/csv")
 
 with tab4:
-    st.subheader("🏭 CPV Code ↔ Industry Lookup")
-    st.markdown("Find the industry for any CPV code, or find all CPV codes for any industry. Each entry shows the historical SME award rate.")
+    st.subheader("CPV Code and Industry Lookup")
     col_left, col_right = st.columns(2)
     with col_left:
-        st.markdown("#### CPV code → Industry")
+        st.markdown("#### CPV code to Industry")
         cpv_input = st.text_input("Enter a CPV code (e.g. 72200000)", key="cpv_in")
         if cpv_input:
             industry_result = cpv_to_industry(cpv_input.strip())
             if industry_result == "Unknown industry":
-                st.warning(f"No industry found for CPV code: {cpv_input}")
+                st.warning("No industry found for CPV code: " + cpv_input)
             else:
-                st.success(f"**{cpv_input}** belongs to: **{industry_result}**")
+                st.success(cpv_input + " belongs to: " + industry_result)
                 sme_rate = rates["cpv_sme_rate"].get(str(cpv_input.strip()), rates["global_sme_rate"])
-                st.metric("Historical SME award rate for this CPV", f"{sme_rate*100:.1f}%")
+                st.metric("Historical SME award rate", "{:.1f}%".format(sme_rate*100))
                 related = INDUSTRY_LOOKUP.get(industry_result, [])
-                related_rates = {c: rates["cpv_sme_rate"].get(c, rates["global_sme_rate"]) for c in related}
-                df_related = pd.DataFrame({"CPV Code":related,"Industry":[industry_result]*len(related),"SME Rate":[f"{related_rates[c]*100:.1f}%" for c in related]})
-                st.dataframe(df_related, use_container_width=True)
+                rr2 = {c: rates["cpv_sme_rate"].get(c, rates["global_sme_rate"]) for c in related}
+                df_rel = pd.DataFrame({"CPV Code":related,"Industry":[industry_result]*len(related),"SME Rate":["{:.1f}%".format(rr2[c]*100) for c in related]})
+                st.dataframe(df_rel, use_container_width=True)
     with col_right:
-        st.markdown("#### Industry → CPV codes")
+        st.markdown("#### Industry to CPV codes")
         industry_input = st.selectbox("Select an industry", all_industries, key="ind_in")
         if industry_input:
             cpv_list = INDUSTRY_LOOKUP.get(industry_input,[])
-            st.success(f"**{industry_input}** contains {len(cpv_list)} CPV code(s)")
-            rs = {c: rates["cpv_sme_rate"].get(c, rates["global_sme_rate"]) for c in cpv_list}
-            df_sector = pd.DataFrame({"CPV Code":cpv_list,"Historical SME Rate":[f"{rs[c]*100:.1f}%" for c in cpv_list]})
-            st.dataframe(df_sector, use_container_width=True)
-            if rs:
-                bc = max(rs, key=rs.get)
-                wc = min(rs, key=rs.get)
-                st.info(f"Highest SME rate: CPV {bc} at {rs[bc]*100:.1f}%")
-                st.info(f"Lowest SME rate:  CPV {wc} at {rs[wc]*100:.1f}%")
+            st.success(industry_input + " contains " + str(len(cpv_list)) + " CPV code(s)")
+            rs2 = {c: rates["cpv_sme_rate"].get(c, rates["global_sme_rate"]) for c in cpv_list}
+            df_sec = pd.DataFrame({"CPV Code":cpv_list,"Historical SME Rate":["{:.1f}%".format(rs2[c]*100) for c in cpv_list]})
+            st.dataframe(df_sec, use_container_width=True)
+            if rs2:
+                bc = max(rs2, key=rs2.get)
+                wc = min(rs2, key=rs2.get)
+                st.info("Highest SME rate: CPV " + bc + " at " + "{:.1f}%".format(rs2[bc]*100))
+                st.info("Lowest SME rate: CPV " + wc + " at " + "{:.1f}%".format(rs2[wc]*100))
 
 with tab5:
-    st.subheader("📈 Historical SME Procurement Insights")
+    st.subheader("Historical SME Procurement Insights")
     c1,c2,c3 = st.columns(3)
-    c1.metric("Global SME award rate", f"{rates['global_sme_rate']*100:.1f}%")
+    c1.metric("Global SME award rate", "{:.1f}%".format(rates["global_sme_rate"]*100))
     c2.metric("Best performing model", best_label)
-    c3.metric("Best AUC-ROC", f"{best_auc:.4f}" if best_auc else "N/A")
+    c3.metric("Best AUC-ROC", "{:.4f}".format(best_auc) if best_auc else "N/A")
     st.divider()
     ca, cb = st.columns(2)
     with ca:
         st.markdown("**Top 10 regions by SME award rate:**")
         rdf = pd.DataFrame(list(rates["region_sme_rate"].items()), columns=["Region","SME Rate"])
         rdf = rdf.sort_values("SME Rate", ascending=False).head(10)
-        rdf["SME Rate"] = rdf["SME Rate"].apply(lambda x: f"{x*100:.1f}%")
+        rdf["SME Rate"] = rdf["SME Rate"].apply(lambda x: "{:.1f}%".format(x*100))
         st.dataframe(rdf, use_container_width=True)
     with cb:
         st.markdown("**Top 10 sectors by SME award rate:**")
         cdf = pd.DataFrame(list(rates["cpv_sme_rate"].items()), columns=["CPV Code","SME Rate"])
         cdf = cdf.sort_values("SME Rate", ascending=False).head(10)
         cdf["Industry"] = cdf["CPV Code"].apply(cpv_to_industry)
-        cdf["SME Rate"] = cdf["SME Rate"].apply(lambda x: f"{x*100:.1f}%")
+        cdf["SME Rate"] = cdf["SME Rate"].apply(lambda x: "{:.1f}%".format(x*100))
         st.dataframe(cdf[["CPV Code","Industry","SME Rate"]], use_container_width=True)
     st.divider()
     st.markdown("**SME Participation Inequality Analysis:**")
-    region_df  = pd.DataFrame(list(rates["region_sme_rate"].items()), columns=["Region","Rate"])
-    sector_df  = pd.DataFrame(list(rates["cpv_sme_rate"].items()), columns=["CPV","Rate"])
-    global_r   = rates["global_sme_rate"]
-    below_avg_regions = (region_df["Rate"] < global_r).sum()
-    below_avg_sectors = (sector_df["Rate"] < global_r).sum()
+    rdf_ineq = pd.DataFrame(list(rates["region_sme_rate"].items()), columns=["Region","Rate"])
+    sdf_ineq = pd.DataFrame(list(rates["cpv_sme_rate"].items()), columns=["CPV","Rate"])
+    global_r5 = rates["global_sme_rate"]
     col1,col2,col3 = st.columns(3)
-    col1.metric("Regions below average", f"{below_avg_regions}/{len(region_df)}")
-    col2.metric("Sectors below average", f"{below_avg_sectors}/{len(sector_df)}")
-    col3.metric("Regional inequality gap", f"{(region_df['Rate'].max()-region_df['Rate'].min())*100:.1f}%")
+    col1.metric("Regions below average", str((rdf_ineq["Rate"] < global_r5).sum()) + "/" + str(len(rdf_ineq)))
+    col2.metric("Sectors below average", str((sdf_ineq["Rate"] < global_r5).sum()) + "/" + str(len(sdf_ineq)))
+    col3.metric("Regional inequality gap", "{:.1f}%".format((rdf_ineq["Rate"].max()-rdf_ineq["Rate"].min())*100))
     st.divider()
     st.markdown("**All model performance comparison:**")
     try:
         rdf2 = pd.read_csv("model_comparison.csv").sort_values("AUC-ROC", ascending=False)
-        rdf2["Recommended"] = rdf2["Model"].apply(lambda x: "⭐" if best_label in x or x in best_label else "")
+        rdf2["Recommended"] = rdf2["Model"].apply(lambda x: "Best" if best_label in x or x in best_label else "")
         st.dataframe(rdf2, use_container_width=True)
     except Exception:
         st.info("Model comparison table not available.")
 
 with tab6:
-    st.subheader("🏢 SME Readiness Analysis")
-    st.markdown("Analyse SME profiles to assess procurement readiness, accessibility scores, and identify structural participation barriers.")
-    st.divider()
+    st.subheader("SME Readiness Analysis")
     analysis_mode = st.radio("Analysis mode", ["Single SME", "Batch upload (CSV)"], horizontal=True)
     if analysis_mode == "Single SME":
         col1, col2 = st.columns(2)
         with col1:
-            sme_name   = st.text_input("SME name (optional)", value="My SME", key="sme_name")
-            sme_cv     = st.number_input("Typical contract value (£)", min_value=0.0, value=75000.0, step=5000.0, key="sme_cv")
+            sme_name   = st.text_input("SME name", value="My SME", key="sme_name")
+            sme_cv     = st.number_input("Typical contract value", min_value=0.0, value=75000.0, step=5000.0, key="sme_cv")
             sme_region = st.selectbox("Primary region", list(encoders.get("region",{"Unknown":0}).keys()), key="sme_r")
         with col2:
             sme_inp = st.radio("CPV input method", ["Select CPV code","Select by industry"], key="sme_inp", horizontal=True)
             if sme_inp == "Select CPV code":
                 sme_cpv = st.selectbox("CPV code", all_cpv_codes, key="sme_cpv_a")
-                st.caption(f"Industry: **{cpv_to_industry(sme_cpv)}**")
+                st.caption("Industry: " + cpv_to_industry(sme_cpv))
             else:
                 sme_ind = st.selectbox("Industry", all_industries, key="sme_ind")
                 sme_cpv = st.selectbox("CPV code", INDUSTRY_LOOKUP.get(sme_ind,["Unknown"]), key="sme_cpv_b")
-        if st.button("🏢 Assess SME readiness", type="primary", use_container_width=True, key="sme_btn"):
+        if st.button("Assess SME readiness", type="primary", use_container_width=True, key="sme_btn"):
             now = datetime.now()
             am_s, aq_s = now.month, (now.month-1)//3+1
             row_s, cr_s, rr_s = build_row(sme_cv, am_s, aq_s, sme_region, sme_cpv, encoders, feature_cols, rates, scaler)
-            p_rf_s  = rf.predict_proba(row_s)[0][1]
-            p_xgb_s = xgb.predict_proba(row_s)[0][1]
-            p_lr_s  = lr.predict_proba(row_s)[0][1]
-            p_s     = p_rf_s*0.5 + p_xgb_s*0.35 + p_lr_s*0.15
+            p_s = rf.predict_proba(row_s)[0][1]*0.5 + xgb.predict_proba(row_s)[0][1]*0.35 + lr.predict_proba(row_s)[0][1]*0.15
             acc_s, conf_s, bid_s = get_accessibility_scores(p_s)
-            st.markdown(f"### Results for: **{sme_name}**")
+            st.markdown("### Results for: " + sme_name)
             c1,c2,c3,c4 = st.columns(4)
-            c1.metric("Win Probability",           f"{p_s*100:.1f}%")
-            c2.metric("Procurement Accessibility", f"{acc_s:.1f}%")
-            c3.metric("SME Confidence Index",      f"{conf_s:.1f}%")
-            c4.metric("Bid Feasibility Score",     f"{bid_s:.2f}")
+            c1.metric("Win Probability",           "{:.1f}%".format(p_s*100))
+            c2.metric("Procurement Accessibility", "{:.1f}%".format(acc_s))
+            c3.metric("SME Confidence Index",      "{:.1f}%".format(conf_s))
+            c4.metric("Bid Feasibility Score",     "{:.2f}".format(bid_s))
             st.progress(float(p_s))
             if p_s >= 0.6:
-                st.success(f"✅ **{sme_name}** is well-positioned. Applying is recommended.")
+                st.success(sme_name + " is well-positioned. Applying is recommended.")
             elif p_s >= 0.4:
-                st.warning(f"⚠️ **{sme_name}** has moderate readiness. Targeted improvements would help.")
+                st.warning(sme_name + " has moderate readiness. Targeted improvements would help.")
             else:
-                st.error(f"❌ **{sme_name}** faces significant barriers. See recommendations below.")
+                st.error(sme_name + " faces significant barriers. See recommendations below.")
             st.divider()
-            st.markdown("### 🔍 Participation Barrier Analysis")
+            st.markdown("### Participation Barrier Analysis")
             reasons_s = explain_prediction(p_s, sme_cv, sme_cpv, sme_region, rates)
-            for reason_name, explanation, direction in reasons_s:
-                if direction == "negative":
-                    st.error(f"**❌ {reason_name}:** {explanation}")
-                elif direction == "positive":
-                    st.success(f"**✅ {reason_name}:** {explanation}")
-                else:
-                    st.info(f"**ℹ️ {reason_name}:** {explanation}")
+            for rname, rexpl, rdir in reasons_s:
+                if rdir == "negative":   st.error("**" + rname + ":** " + rexpl)
+                elif rdir == "positive": st.success("**" + rname + ":** " + rexpl)
+                else:                    st.info("**" + rname + ":** " + rexpl)
             st.divider()
             base_s, sugg_s = gap_analysis(sme_cv, sme_cpv, sme_region, encoders, feature_cols, rates, scaler, rf, xgb, lr)
             if sugg_s:
-                st.markdown("### 🎯 Procurement Strategy Recommendations")
+                st.markdown("### Procurement Strategy Recommendations")
                 for category, action, new_prob, improvement, advice in sugg_s[:3]:
-                    with st.expander(f"💡 {action}  →  {new_prob*100:.1f}%  (+{improvement*100:.1f}%)"):
-                        st.markdown(f"**{advice}**")
-                        col_a, col_b = st.columns(2)
-                        col_a.metric("Current probability", f"{base_s*100:.1f}%")
-                        col_b.metric("If action taken",     f"{new_prob*100:.1f}%", delta=f"+{improvement*100:.1f}%")
+                    with st.expander(action + " -> " + "{:.1f}%".format(new_prob*100) + " (+" + "{:.1f}%".format(improvement*100) + ")"):
+                        st.markdown("**" + advice + "**")
+                        ca2, cb2 = st.columns(2)
+                        ca2.metric("Current probability", "{:.1f}%".format(base_s*100))
+                        cb2.metric("If action taken",     "{:.1f}%".format(new_prob*100), delta="+" + "{:.1f}%".format(improvement*100))
     else:
         st.markdown("#### Batch analysis — upload a CSV of SME profiles")
-        st.markdown("**Required columns:** `sme_name`, `contract_value`, `cpv_code`, `region`")
+        st.markdown("**Required columns:** sme_name, contract_value, cpv_code, region")
         sample_data = pd.DataFrame({
             "sme_name":       ["Tech SME Ltd","Build Co Ltd","Clean Services Ltd"],
             "contract_value": [45000, 250000, 35000],
@@ -639,114 +641,98 @@ with tab6:
             "region":         ["London","North West","Yorkshire and the Humber"],
             "sector":         ["IT services","Construction","Cleaning services"],
         })
-        st.download_button("📥 Download sample CSV template", sample_data.to_csv(index=False), "sme_template.csv", "text/csv")
+        st.download_button("Download sample CSV template", sample_data.to_csv(index=False), "sme_template.csv", "text/csv")
         uploaded = st.file_uploader("Upload your SME CSV", type=["csv"], key="sme_upload")
         if uploaded:
             sme_input_df = pd.read_csv(uploaded)
-            st.success(f"Loaded {len(sme_input_df)} SMEs.")
+            st.success("Loaded " + str(len(sme_input_df)) + " SMEs.")
             st.dataframe(sme_input_df.head(), use_container_width=True)
-            if st.button("🏢 Analyse all SMEs", type="primary", use_container_width=True, key="batch_btn"):
-                with st.spinner(f"Analysing {len(sme_input_df)} SME profiles..."):
+            if st.button("Analyse all SMEs", type="primary", use_container_width=True, key="batch_btn"):
+                with st.spinner("Analysing SME profiles..."):
                     batch_results = analyse_sme_batch(sme_input_df, encoders, feature_cols, rates, scaler, rf, xgb, lr)
-                st.success(f"Analysis complete for {len(batch_results)} SMEs")
+                st.success("Analysis complete for " + str(len(batch_results)) + " SMEs")
                 col1,col2,col3,col4 = st.columns(4)
-                col1.metric("Avg win probability", f"{batch_results['win_probability'].mean()*100:.1f}%")
+                col1.metric("Avg win probability", "{:.1f}%".format(batch_results["win_probability"].mean()*100))
                 col2.metric("Likely to win",       str((batch_results["prediction"]=="Likely to win").sum()))
                 col3.metric("Unlikely to win",     str((batch_results["prediction"]=="Unlikely to win").sum()))
                 col4.metric("Need preparation",    str((batch_results["recommendation"]=="Needs preparation").sum()))
                 st.dataframe(batch_results, use_container_width=True)
-                st.download_button("📥 Download full report", batch_results.to_csv(index=False), "sme_readiness_report.csv", "text/csv")
+                st.download_button("Download full report", batch_results.to_csv(index=False), "sme_readiness_report.csv", "text/csv")
 
 with tab7:
-    st.subheader("🗺️ SME Procurement Barrier Dashboard")
+    st.subheader("SME Procurement Barrier Dashboard")
     st.markdown("Aggregate analysis of procurement accessibility barriers across sectors and regions.")
     st.divider()
-    global_r = rates["global_sme_rate"]
-    region_df2 = pd.DataFrame(list(rates["region_sme_rate"].items()), columns=["Region","Rate"])
-    sector_df2 = pd.DataFrame(list(rates["cpv_sme_rate"].items()), columns=["CPV Code","Rate"])
-    sector_df2["Industry"] = sector_df2["CPV Code"].apply(cpv_to_industry)
-    pct_below     = (region_df2["Rate"] < global_r * 0.8).mean() * 100
-    finding1_pct  = (region_df2["Rate"] < 0.5).mean() * 100
-    finding2_best = sector_df2.nlargest(1,"Rate").iloc[0]
-    finding2_worst= sector_df2.nsmallest(1,"Rate").iloc[0]
-    finding3_gap  = (region_df2["Rate"].max() - region_df2["Rate"].min()) * 100
+    global_r7 = rates["global_sme_rate"]
+    rdf7 = pd.DataFrame(list(rates["region_sme_rate"].items()), columns=["Region","Rate"])
+    sdf7 = pd.DataFrame(list(rates["cpv_sme_rate"].items()), columns=["CPV Code","Rate"])
+    sdf7["Industry"] = sdf7["CPV Code"].apply(cpv_to_industry)
+    pct_below7    = (rdf7["Rate"] < global_r7 * 0.8).mean() * 100
+    finding1_pct7 = (rdf7["Rate"] < 0.5).mean() * 100
+    finding2_best7 = sdf7.nlargest(1,"Rate").iloc[0]
+    finding2_worst7= sdf7.nsmallest(1,"Rate").iloc[0]
+    finding3_gap7  = (rdf7["Rate"].max() - rdf7["Rate"].min()) * 100
     col1,col2,col3 = st.columns(3)
-    col1.metric("Global SME award rate", f"{global_r*100:.1f}%")
-    col2.metric("Regions significantly below average", f"{pct_below:.0f}%")
-    col3.metric("Regional inequality gap", f"{finding3_gap:.1f}%")
+    col1.metric("Global SME award rate",              "{:.1f}%".format(global_r7*100))
+    col2.metric("Regions significantly below average","{:.0f}%".format(pct_below7))
+    col3.metric("Regional inequality gap",            "{:.1f}%".format(finding3_gap7))
     st.divider()
-    st.markdown("### 📊 Key Research Findings")
+    st.markdown("### Key Research Findings")
     col_f1,col_f2,col_f3 = st.columns(3)
     with col_f1:
-        f1_text = f"{finding1_pct:.0f}% of regions show SME award rates below 50%, confirming that low predicted win probability is a rational reason for SME non-participation."
-        st.error("**Finding 1 — Structural Barrier**")
-        st.error(f1_text)
+        st.error("Finding 1 — Structural Barrier: " + "{:.0f}%".format(finding1_pct7) + " of regions show SME award rates below 50%, confirming that low predicted win probability is a rational reason for SME non-participation.")
     with col_f2:
-        f2_text = f"Gap between most accessible sector ({finding2_best['Industry']}: {finding2_best['Rate']*100:.1f}%) and least ({finding2_worst['Industry']}: {finding2_worst['Rate']*100:.1f}%) shows structural imbalance."
-        st.warning("**Finding 2 — Sector Inequality**")
-        st.warning(f2_text)
+        st.warning("Finding 2 — Sector Inequality: Gap between most accessible sector (" + finding2_best7["Industry"] + ": " + "{:.1f}%".format(finding2_best7["Rate"]*100) + ") and least (" + finding2_worst7["Industry"] + ": " + "{:.1f}%".format(finding2_worst7["Rate"]*100) + ") shows structural imbalance.")
     with col_f3:
-        f3_text = f"A {finding3_gap:.1f}% gap between highest and lowest regional SME rates signals uneven procurement opportunity."
-        st.info("**Finding 3 — Regional Inequality**")
-        st.info(f3_text)
+        st.info("Finding 3 — Regional Inequality: A " + "{:.1f}%".format(finding3_gap7) + " gap between highest and lowest regional SME rates signals uneven procurement opportunity.")
     st.divider()
     col_l, col_r = st.columns(2)
     with col_l:
         st.markdown("**Regional accessibility ranking:**")
-        rdf_s = region_df2.sort_values("Rate", ascending=False).copy()
-        rdf_s["SME Rate"]     = rdf_s["Rate"].apply(lambda x: f"{x*100:.1f}%")
-        rdf_s["Status"]       = rdf_s["Rate"].apply(lambda x: "✅ Above average" if x >= global_r else "❌ Below average")
-        rdf_s["Barrier Level"]= rdf_s["Rate"].apply(lambda x: "Low" if x >= global_r*1.1 else "Medium" if x >= global_r*0.9 else "High")
-        st.dataframe(rdf_s[["Region","SME Rate","Status","Barrier Level"]], use_container_width=True)
+        rdf_s7 = rdf7.sort_values("Rate", ascending=False).copy()
+        rdf_s7["SME Rate"]      = rdf_s7["Rate"].apply(lambda x: "{:.1f}%".format(x*100))
+        rdf_s7["Status"]        = rdf_s7["Rate"].apply(lambda x: "Above average" if x >= global_r7 else "Below average")
+        rdf_s7["Barrier Level"] = rdf_s7["Rate"].apply(lambda x: "Low" if x >= global_r7*1.1 else "Medium" if x >= global_r7*0.9 else "High")
+        st.dataframe(rdf_s7[["Region","SME Rate","Status","Barrier Level"]], use_container_width=True)
     with col_r:
         st.markdown("**Sector accessibility ranking:**")
-        sdf_s = sector_df2.sort_values("Rate", ascending=False).copy()
-        sdf_s["SME Rate"]     = sdf_s["Rate"].apply(lambda x: f"{x*100:.1f}%")
-        sdf_s["Status"]       = sdf_s["Rate"].apply(lambda x: "✅ Above average" if x >= global_r else "❌ Below average")
-        sdf_s["Barrier Level"]= sdf_s["Rate"].apply(lambda x: "Low" if x >= global_r*1.1 else "Medium" if x >= global_r*0.9 else "High")
-        st.dataframe(sdf_s[["Industry","SME Rate","Status","Barrier Level"]].head(20), use_container_width=True)
+        sdf_s7 = sdf7.sort_values("Rate", ascending=False).copy()
+        sdf_s7["SME Rate"]      = sdf_s7["Rate"].apply(lambda x: "{:.1f}%".format(x*100))
+        sdf_s7["Status"]        = sdf_s7["Rate"].apply(lambda x: "Above average" if x >= global_r7 else "Below average")
+        sdf_s7["Barrier Level"] = sdf_s7["Rate"].apply(lambda x: "Low" if x >= global_r7*1.1 else "Medium" if x >= global_r7*0.9 else "High")
+        st.dataframe(sdf_s7[["Industry","SME Rate","Status","Barrier Level"]].head(20), use_container_width=True)
     st.divider()
-    st.markdown("### 📋 Policy Insight Report")
-    st.markdown(f"""
-**AI-Driven Analysis of SME Procurement Participation Barriers**
-
-1. **Structural accessibility barrier confirmed:** {finding1_pct:.0f}% of UK regions have SME award rates below 50%, providing quantitative evidence that low win probability is a rational deterrent to SME participation.
-
-2. **Sector imbalance:** A {(finding2_best["Rate"]-finding2_worst["Rate"])*100:.1f}% gap between most and least SME-accessible sectors confirms structural barriers beyond individual bid quality.
-
-3. **Regional inequality:** A {finding3_gap:.1f}% gap between regional SME award rates indicates geographic location is a significant determinant of procurement accessibility.
-
-4. **Bid cost deterrence:** With typical tender costs of £5,000–£20,000 and average SME win probabilities below 50% in many sectors and regions, the expected return from bidding is often negative — confirming SME non-participation is economically rational.
-
-5. **Policy recommendation:** Targeted interventions in highest-barrier sectors and regions, combined with simplified procurement frameworks and lower-value contract splitting, would most improve SME participation rates.
-    """)
-generated   = datetime.now().strftime('%Y-%m-%d')
-    global_str  = f"{global_r*100:.1f}%"
-    below_str   = f"{pct_below:.0f}%"
-    gap_str     = f"{finding3_gap:.1f}%"
-    report_text = "SME Procurement Barrier Analysis
-Generated: " + generated + "
-
-Global SME rate: " + global_str + "
-Regions below average: " + below_str + "
-Inequality gap: " + gap_str + "
-"
-    st.download_button("📥 Download policy insight report", report_text, "policy_insight_report.txt", "text/plain")
+    st.markdown("### Policy Insight Report")
+    gap_pct  = "{:.1f}%".format((finding2_best7["Rate"]-finding2_worst7["Rate"])*100)
+    gap3_str = "{:.1f}%".format(finding3_gap7)
+    f1_str   = "{:.0f}%".format(finding1_pct7)
+    gr7_str  = "{:.1f}%".format(global_r7*100)
+    policy_text = (
+        "AI-Driven Analysis of SME Procurement Participation Barriers\n\n"
+        "1. Structural accessibility barrier confirmed: " + f1_str + " of UK regions have SME award rates below 50%.\n"
+        "2. Sector imbalance: A " + gap_pct + " gap between most and least SME-accessible sectors.\n"
+        "3. Regional inequality: A " + gap3_str + " gap between regional SME award rates.\n"
+        "4. Bid cost deterrence: Average SME win probabilities below 50% in many sectors confirm non-participation is economically rational.\n"
+        "5. Policy recommendation: Target highest-barrier sectors and regions with simplified frameworks and lower-value contract splitting.\n"
+    )
+    st.markdown(policy_text)
+    report_date = datetime.now().strftime("%Y-%m-%d")
+    report_file = "SME Procurement Barrier Analysis\nGenerated: " + report_date + "\n\nGlobal SME rate: " + gr7_str + "\nRegions below average: " + "{:.0f}%".format(pct_below7) + "\nInequality gap: " + gap3_str + "\n"
+    st.download_button("Download policy insight report", report_file, "policy_insight_report.txt", "text/plain")
 
 with st.sidebar:
-    st.header("🏆 SME Procurement Intelligence")
+    st.header("SME Procurement Intelligence")
     st.markdown("**Platform capabilities:**")
-    st.markdown("🔮 Win probability prediction")
-    st.markdown("📊 Barrier & gap analysis")
-    st.markdown("📡 Live contract feed (dual API)")
-    st.markdown("🏭 CPV code ↔ industry lookup")
-    st.markdown("📈 Historical procurement insights")
-    st.markdown("🏢 SME readiness assessment")
-    st.markdown("🗺️ Procurement barrier dashboard")
+    st.markdown("- Win probability prediction")
+    st.markdown("- Barrier and gap analysis")
+    st.markdown("- Live contract feed (dual API)")
+    st.markdown("- CPV code to industry lookup")
+    st.markdown("- Historical procurement insights")
+    st.markdown("- SME readiness assessment")
+    st.markdown("- Procurement barrier dashboard")
     st.divider()
     if best_auc:
-        st.success(f"⭐ Best model: **{best_label}**
-AUC-ROC: {best_auc:.4f}")
+        st.success("Best model: " + best_label + "\nAUC-ROC: " + "{:.4f}".format(best_auc))
     st.divider()
     st.markdown("**Research framing:**")
     st.caption("Explainable AI for understanding SME participation barriers in UK public procurement")
