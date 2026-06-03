@@ -1,0 +1,30 @@
+region,count,avg_win_prob,avg_capability
+Scotland,19,0.117,63.421
+Wales,6,0.121,62.167
+Unknown,65,0.271,61.323
+Bedfordshire,1,0.296,60.0
+East Sussex,2,0.355,56.0
+West Midlands,10,0.368,56.8
+Northants,1,0.375,60.0
+Shropshire,1,0.38,73.0
+London,37,0.4,62.622
+Suffolk,1,0.413,73.0
+Yorkshire and the Humber,3,0.422,68.667
+Berkshire,1,0.427,60.0
+North West,14,0.431,60.857
+North East,3,0.439,60.0
+Gloucestershire,1,0.441,60.0
+Essex,3,0.442,64.333
+County Derry,1,0.446,73.0
+South East,6,0.455,62.167
+Hampshire,1,0.478,60.0
+South West,1,0.49,73.0
+Middlesex,2,0.503,73.0
+Merseyside,1,0.523,60.0
+Buckinghamshire,1,0.526,60.0
+Northamptonshire,1,0.527,60.0
+Leics,1,0.537,73.0
+Carmarthenshire,1,0.547,60.0
+Northern Ireland,4,0.742,58.75
+East Midlands,5,0.76,65.2
+East of England,6,0.762,64.333

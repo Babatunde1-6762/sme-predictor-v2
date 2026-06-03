@@ -1,0 +1,11 @@
+sector,count,avg_win_prob,avg_capability,avg_readiness
+Accounting services,20,0.317,61.4,43.6
+Legal services,20,0.334,62.85,45.175
+Road transport services,20,0.336,59.8,44.035
+Cleaning services,20,0.343,61.9,45.345
+Building construction,20,0.344,65.5,46.86
+Training services,20,0.347,59.6,44.63
+Medical practice services,20,0.355,61.65,45.94
+Software programming services,20,0.383,65.55,49.2
+Environmental services,20,0.387,61.35,47.8
+IT support and consultancy,19,0.436,61.632,50.837
