@@ -9,6 +9,11 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from datetime import datetime, timedelta
+try:
+    import shap
+    SHAP_AVAILABLE = True
+except Exception:
+    SHAP_AVAILABLE = False
 
 CPV_LOOKUP = {
     "45000000":"Construction","45100000":"Site preparation work",
@@ -452,6 +457,78 @@ for opt in ["Random Forest","XGBoost","Logistic Regression"]:
 default_index=next((i for i,o in enumerate(model_options) if "Recommended" in o),0)
 
 st.set_page_config(page_title="SME Procurement Intelligence",page_icon="trophy",layout="wide")
+
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&display=swap');
+
+html, body, [class*="css"] { font-family: 'DM Sans', sans-serif !important; }
+#MainMenu, footer, .stDeployButton { display: none !important; }
+header[data-testid="stHeader"] { background: transparent; }
+.block-container { padding-top: 1.5rem !important; max-width: 1380px; }
+.stApp { background: #f0f2f8; }
+
+h1 { font-weight: 700 !important; color: #1a1a2e !important; letter-spacing: -0.02em; }
+h2, h3 { font-weight: 700 !important; color: #1a1a2e !important; }
+
+/* Tabs */
+.stTabs [data-baseweb="tab-list"] {
+    background: white; border-radius: 12px; padding: 6px;
+    gap: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+.stTabs [data-baseweb="tab"] {
+    border-radius: 8px; padding: 8px 16px; font-weight: 600;
+    font-size: 0.80rem; letter-spacing: 0.01em; color: #6b7280;
+    background: transparent;
+}
+.stTabs [aria-selected="true"] {
+    background: #1a1a2e !important; color: white !important;
+}
+.stTabs [data-baseweb="tab-highlight"],
+.stTabs [data-baseweb="tab-border"] { display: none; }
+
+/* Metric cards */
+[data-testid="stMetric"] {
+    background: white; border-radius: 12px; padding: 16px 18px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+}
+[data-testid="stMetricLabel"] {
+    font-size: 0.72rem !important; color: #9ca3af !important;
+    text-transform: uppercase; letter-spacing: 0.05em;
+}
+[data-testid="stMetricValue"] { font-size: 1.6rem !important; font-weight: 800 !important; color: #1a1a2e; }
+
+/* Buttons */
+.stButton button {
+    background: #1a1a2e; color: white; border: none; border-radius: 8px;
+    padding: 8px 22px; font-weight: 600; font-size: 0.85rem;
+    transition: all 0.15s ease;
+}
+.stButton button:hover { background: #2d2d4e; transform: translateY(-1px); }
+
+/* Inputs */
+.stNumberInput input, .stSelectbox div[data-baseweb="select"] > div, .stTextInput input {
+    border-radius: 8px !important;
+}
+
+/* Dataframe */
+[data-testid="stDataFrame"] {
+    border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+}
+
+/* Alerts softer */
+.stAlert { border-radius: 10px; }
+
+/* Dividers tighter */
+hr { margin: 1rem 0 !important; }
+
+/* Expander */
+.streamlit-expanderHeader { font-weight: 600; border-radius: 8px; }
+</style>
+""", unsafe_allow_html=True)
+
+
 st.title("AI-Driven SME Procurement Accessibility Intelligence Platform")
 st.markdown("Explainable AI revealing structural barriers affecting SME participation in UK public procurement.")
 if best_auc:
@@ -509,6 +586,37 @@ with tab1:
         col3.metric("Logistic Reg (15%)","{:.1f}%".format(p_lr1*100))
         col4.metric("Ensemble","{:.1f}%".format(p_ens1*100))
         st.info("Industry: "+cpv_to_industry(cp1)+"  |  Sector SME rate: "+"{:.1f}%".format(cr1*100)+"  |  Region SME rate: "+"{:.1f}%".format(rr1*100))
+        st.divider()
+        st.markdown("### SHAP Feature Attribution")
+        if SHAP_AVAILABLE:
+            try:
+                explainer=shap.TreeExplainer(rf)
+                sv=explainer.shap_values(row1)
+                if isinstance(sv,list):
+                    sv_use=sv[1][0]
+                else:
+                    sv_use=sv[0]
+                contribs=sorted(zip(feature_cols,sv_use),key=lambda x:abs(x[1]),reverse=True)
+                st.caption("SHAP values show how each feature pushed this specific prediction above or below the baseline. Positive values increase predicted SME win probability; negative values decrease it.")
+                figs,axs=plt.subplots(figsize=(8,4))
+                names=[c[0] for c in contribs[:8]][::-1]
+                vals=[c[1] for c in contribs[:8]][::-1]
+                colors=["#16a34a" if v>=0 else "#dc2626" for v in vals]
+                axs.barh(names,vals,color=colors)
+                axs.set_xlabel("SHAP value (impact on SME win probability)")
+                axs.set_title("Top feature contributions to this prediction (Random Forest)")
+                axs.axvline(0,color="#1a1a2e",linewidth=0.8)
+                plt.tight_layout()
+                st.pyplot(figs)
+                plt.close(figs)
+                st.markdown("**Plain-language reading:**")
+                for fname,fval in contribs[:5]:
+                    direction="increased" if fval>=0 else "decreased"
+                    st.markdown("- **"+fname+"** "+direction+" the predicted win probability (SHAP "+"{:+.3f}".format(fval)+")")
+            except Exception as e:
+                st.warning("SHAP attribution could not be computed for this input: "+str(e))
+        else:
+            st.info("SHAP library is not installed in this deployment. Add 'shap' to requirements.txt to enable per-prediction feature attribution. The domain-logic explainability above provides interpretable reasoning in the meantime.")
 
 with tab2:
     st.subheader("Barrier and Capability Gap Analysis")
@@ -830,6 +938,37 @@ with tab7:
         col3.metric("Average win probability","{:.1f}%".format(ch_pred["ml_win_probability"].mean()*100))
         col4.metric("Average capability score","{:.1f}/100".format(ch_pred["capability_score"].mean()))
         st.divider()
+        st.markdown("### Global SHAP Feature Importance")
+        if SHAP_AVAILABLE:
+            try:
+                sample_rows=[]
+                for _,rr in ch_pred.head(50).iterrows():
+                    try:
+                        rw,_,_=build_row(float(rr.get("contract_value",50000)),6,2,rr.get("region","Unknown"),str(rr.get("cpv_code","72000000")),encoders,feature_cols,rates,scaler)
+                        sample_rows.append(rw[0])
+                    except Exception:
+                        pass
+                if sample_rows:
+                    Xs=np.array(sample_rows)
+                    expl=shap.TreeExplainer(rf)
+                    svv=expl.shap_values(Xs)
+                    if isinstance(svv,list): svv=svv[1]
+                    mean_abs=np.abs(svv).mean(axis=0)
+                    imp=sorted(zip(feature_cols,mean_abs),key=lambda x:x[1],reverse=True)
+                    figs,axs=plt.subplots(figsize=(9,4))
+                    names=[c[0] for c in imp[:10]][::-1]
+                    vals=[c[1] for c in imp[:10]][::-1]
+                    axs.barh(names,vals,color="#1a1a2e")
+                    axs.set_xlabel("Mean absolute SHAP value")
+                    axs.set_title("Global feature importance across real SME sample (SHAP, Random Forest)")
+                    plt.tight_layout()
+                    st.pyplot(figs); plt.close(figs)
+                    st.caption("SHAP-based global importance computed across the real Companies House SME sample. This complements the impurity-based feature importance reported in the dissertation with a more rigorous game-theoretic attribution.")
+            except Exception as e:
+                st.warning("Global SHAP summary unavailable: "+str(e))
+        else:
+            st.info("Install 'shap' in requirements.txt to enable SHAP-based global feature importance.")
+        st.divider()
         st.markdown("### Policy Analysis Charts — Real UK SME Data")
         try:
             fig_ch=make_policy_charts(ch_pred)
@@ -872,7 +1011,7 @@ with tab7:
         st.divider()
         st.markdown("**Key Research Finding:**")
         below_50_ch=(ch_pred["ml_win_probability"]<0.5).mean()*100
-        st.error("When the trained ML model was applied to "+str(len(ch_pred))+" real UK SMEs from Companies House, "+"{:.1f}%".format(below_50_ch)+"% were predicted to have below 50% win probability. This provides quantitative AI-driven evidence that SME reluctance to participate in public procurement is economically rational — confirming the central research hypothesis.")
+        st.error("When the trained ML model was applied to "+str(len(ch_pred))+" real UK SMEs from Companies House, "+"{:.1f}%".format(below_50_ch)+"% were predicted to have below 50% win probability. This finding is consistent with the rational non-participation hypothesis: structurally low predicted win probabilities may help explain reduced SME participation. The model predicts historical outcome probabilities and does not directly observe SME bidding decisions.")
         st.divider()
         st.markdown("**Full SME predictions dataset:**")
         st.dataframe(ch_pred[["sme_name","sector","region","ml_win_probability","capability_score","combined_readiness","prediction","recommendation"]].head(50),use_container_width=True)
