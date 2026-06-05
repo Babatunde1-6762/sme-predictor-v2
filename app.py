@@ -616,7 +616,7 @@ with tab1:
             except Exception as e:
                 st.warning("SHAP attribution could not be computed for this input: "+str(e))
         else:
-            st.info("SHAP library is not installed in this deployment. Add 'shap' to requirements.txt to enable per-prediction feature attribution. The domain-logic explainability above provides interpretable reasoning in the meantime.")
+            st.info("This deployment runs on Python 3.14, for which the SHAP library is not yet available. The domain-logic explainability above provides interpretable, plain-language reasoning for every prediction. SHAP-based attribution is discussed in the dissertation as a future extension.")
 
 with tab2:
     st.subheader("Barrier and Capability Gap Analysis")
@@ -940,34 +940,37 @@ with tab7:
         st.divider()
         st.markdown("### Global SHAP Feature Importance")
         if SHAP_AVAILABLE:
-            try:
-                sample_rows=[]
-                for _,rr in ch_pred.head(50).iterrows():
+            st.caption("SHAP attribution is computationally intensive. Click below to compute global feature importance across a sample of real SMEs.")
+            if st.button("Compute SHAP feature importance",key="shap_global_btn"):
+                with st.spinner("Computing SHAP values across SME sample..."):
                     try:
-                        rw,_,_=build_row(float(rr.get("contract_value",50000)),6,2,rr.get("region","Unknown"),str(rr.get("cpv_code","72000000")),encoders,feature_cols,rates,scaler)
-                        sample_rows.append(rw[0])
-                    except Exception:
-                        pass
-                if sample_rows:
-                    Xs=np.array(sample_rows)
-                    expl=shap.TreeExplainer(rf)
-                    svv=expl.shap_values(Xs)
-                    if isinstance(svv,list): svv=svv[1]
-                    mean_abs=np.abs(svv).mean(axis=0)
-                    imp=sorted(zip(feature_cols,mean_abs),key=lambda x:x[1],reverse=True)
-                    figs,axs=plt.subplots(figsize=(9,4))
-                    names=[c[0] for c in imp[:10]][::-1]
-                    vals=[c[1] for c in imp[:10]][::-1]
-                    axs.barh(names,vals,color="#1a1a2e")
-                    axs.set_xlabel("Mean absolute SHAP value")
-                    axs.set_title("Global feature importance across real SME sample (SHAP, Random Forest)")
-                    plt.tight_layout()
-                    st.pyplot(figs); plt.close(figs)
-                    st.caption("SHAP-based global importance computed across the real Companies House SME sample. This complements the impurity-based feature importance reported in the dissertation with a more rigorous game-theoretic attribution.")
-            except Exception as e:
-                st.warning("Global SHAP summary unavailable: "+str(e))
+                        sample_rows=[]
+                        for _,rr in ch_pred.head(30).iterrows():
+                            try:
+                                rw,_,_=build_row(float(rr.get("contract_value",50000)),6,2,rr.get("region","Unknown"),str(rr.get("cpv_code","72000000")),encoders,feature_cols,rates,scaler)
+                                sample_rows.append(rw[0])
+                            except Exception:
+                                pass
+                        if sample_rows:
+                            Xs=np.array(sample_rows)
+                            expl=shap.TreeExplainer(rf)
+                            svv=expl.shap_values(Xs)
+                            if isinstance(svv,list): svv=svv[1]
+                            mean_abs=np.abs(svv).mean(axis=0)
+                            imp=sorted(zip(feature_cols,mean_abs),key=lambda x:x[1],reverse=True)
+                            figs,axs=plt.subplots(figsize=(9,4))
+                            names=[c[0] for c in imp[:10]][::-1]
+                            vals=[c[1] for c in imp[:10]][::-1]
+                            axs.barh(names,vals,color="#1a1a2e")
+                            axs.set_xlabel("Mean absolute SHAP value")
+                            axs.set_title("Global feature importance across real SME sample (SHAP, Random Forest)")
+                            plt.tight_layout()
+                            st.pyplot(figs); plt.close(figs)
+                            st.caption("SHAP-based global importance across the real Companies House SME sample, complementing the impurity-based importance in the dissertation with game-theoretic attribution.")
+                    except Exception as e:
+                        st.warning("Global SHAP summary unavailable: "+str(e))
         else:
-            st.info("Install 'shap' in requirements.txt to enable SHAP-based global feature importance.")
+            st.info("This deployment runs on Python 3.14, for which SHAP is not yet available. The impurity-based feature importance (reported in the dissertation) and the domain-logic explainability remain fully available throughout the platform.")
         st.divider()
         st.markdown("### Policy Analysis Charts — Real UK SME Data")
         try:
@@ -977,7 +980,7 @@ with tab7:
         except Exception as e:
             st.warning("Chart generation error: "+str(e))
             try:
-                st.image("sme_policy_analysis.png",caption="AI-Driven SME Procurement Accessibility Analysis",use_column_width=True)
+                st.image("sme_policy_analysis.png",caption="AI-Driven SME Procurement Accessibility Analysis",use_container_width=True)
             except Exception:
                 st.info("Charts not available — run the SME data pipeline in the notebook to generate them.")
         st.divider()
