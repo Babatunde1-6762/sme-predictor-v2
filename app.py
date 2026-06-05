@@ -466,65 +466,63 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif !important; }
 #MainMenu, footer, .stDeployButton { display: none !important; }
 header[data-testid="stHeader"] { background: transparent; }
 .block-container { padding-top: 1.5rem !important; max-width: 1380px; }
-.stApp { background: #f0f2f8; }
 
-h1 { font-weight: 700 !important; color: #1a1a2e !important; letter-spacing: -0.02em; }
-h2, h3 { font-weight: 700 !important; color: #1a1a2e !important; }
+/* Clean white background (original look) */
+.stApp { background: #ffffff; }
 
-/* Tabs */
+/* LSBU red headings */
+h1 { font-weight: 700 !important; color: #E4022E !important; letter-spacing: -0.01em; }
+h2, h3 { font-weight: 700 !important; color: #1a1a1a !important; }
+
+/* Tabs - LSBU red active state */
 .stTabs [data-baseweb="tab-list"] {
-    background: white; border-radius: 12px; padding: 6px;
-    gap: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 16px;
-    flex-wrap: wrap;
+    background: #f7f7f9; border-radius: 10px; padding: 5px;
+    gap: 4px; margin-bottom: 16px; flex-wrap: wrap;
 }
 .stTabs [data-baseweb="tab"] {
-    border-radius: 8px; padding: 8px 16px; font-weight: 600;
-    font-size: 0.80rem; letter-spacing: 0.01em; color: #6b7280;
-    background: transparent;
+    border-radius: 7px; padding: 8px 16px; font-weight: 600;
+    font-size: 0.80rem; color: #555; background: transparent;
 }
 .stTabs [aria-selected="true"] {
-    background: #1a1a2e !important; color: white !important;
+    background: #E4022E !important; color: white !important;
 }
 .stTabs [data-baseweb="tab-highlight"],
 .stTabs [data-baseweb="tab-border"] { display: none; }
 
 /* Metric cards */
 [data-testid="stMetric"] {
-    background: white; border-radius: 12px; padding: 16px 18px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    background: #fafafa; border-radius: 10px; padding: 14px 16px;
+    border: 1px solid #eee; border-top: 3px solid #E4022E;
 }
 [data-testid="stMetricLabel"] {
-    font-size: 0.72rem !important; color: #9ca3af !important;
-    text-transform: uppercase; letter-spacing: 0.05em;
+    font-size: 0.72rem !important; color: #888 !important;
+    text-transform: uppercase; letter-spacing: 0.04em;
 }
-[data-testid="stMetricValue"] { font-size: 1.6rem !important; font-weight: 800 !important; color: #1a1a2e; }
+[data-testid="stMetricValue"] { font-size: 1.5rem !important; font-weight: 800 !important; color: #1a1a1a; }
 
-/* Buttons */
+/* Buttons - LSBU red */
 .stButton button {
-    background: #1a1a2e; color: white; border: none; border-radius: 8px;
+    background: #E4022E; color: white; border: none; border-radius: 7px;
     padding: 8px 22px; font-weight: 600; font-size: 0.85rem;
     transition: all 0.15s ease;
 }
-.stButton button:hover { background: #2d2d4e; transform: translateY(-1px); }
+.stButton button:hover { background: #b80125; transform: translateY(-1px); }
+
+/* Primary button */
+.stButton button[kind="primary"] { background: #E4022E; }
+.stButton button[kind="primary"]:hover { background: #b80125; }
 
 /* Inputs */
-.stNumberInput input, .stSelectbox div[data-baseweb="select"] > div, .stTextInput input {
-    border-radius: 8px !important;
-}
+.stNumberInput input, .stTextInput input { border-radius: 7px !important; }
 
 /* Dataframe */
-[data-testid="stDataFrame"] {
-    border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.07);
-}
+[data-testid="stDataFrame"] { border-radius: 10px; overflow: hidden; border: 1px solid #eee; }
 
-/* Alerts softer */
-.stAlert { border-radius: 10px; }
+/* Progress bar - LSBU red */
+.stProgress > div > div > div > div { background-color: #E4022E; }
 
-/* Dividers tighter */
-hr { margin: 1rem 0 !important; }
-
-/* Expander */
-.streamlit-expanderHeader { font-weight: 600; border-radius: 8px; }
+/* Dividers */
+hr { margin: 1rem 0 !important; border-color: #eee; }
 </style>
 """, unsafe_allow_html=True)
 
