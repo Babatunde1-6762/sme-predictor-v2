@@ -1,0 +1,6 @@
+Model,Accuracy,Precision,Recall,F1-Score,AUC-ROC,Brier Score
+Logistic Regression,70.0,58.5,68.6,63.2,0.772,0.193
+Random Forest,75.6,70.8,59.6,64.7,0.826,0.163
+XGBoost,71.4,59.8,72.7,65.6,0.8,0.182
+TensorFlow Neural Network,,,,,0.829,
+PyTorch Neural Network,,,,,0.825,
