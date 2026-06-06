@@ -15,6 +15,14 @@ try:
 except Exception:
     SHAP_AVAILABLE = False
 
+def _shap_positive_class(sv):
+    if isinstance(sv, list):
+        return np.asarray(sv[1] if len(sv) > 1 else sv[0])
+    sv = np.asarray(sv)
+    if sv.ndim == 3:
+        return sv[:, :, 1] if sv.shape[2] > 1 else sv[:, :, 0]
+    return sv
+
 CPV_LOOKUP = {
     "45000000":"Construction","45100000":"Site preparation work",
     "45200000":"Building construction","45300000":"Building installation works",
@@ -590,10 +598,7 @@ with tab1:
             try:
                 explainer=shap.TreeExplainer(rf)
                 sv=explainer.shap_values(row1)
-                if isinstance(sv,list):
-                    sv_use=sv[1][0]
-                else:
-                    sv_use=sv[0]
+                sv_use=np.asarray(_shap_positive_class(sv))[0]
                 contribs=sorted(zip(feature_cols,sv_use),key=lambda x:abs(x[1]),reverse=True)
                 st.caption("SHAP values show how each feature pushed this specific prediction above or below the baseline. Positive values increase predicted SME win probability; negative values decrease it.")
                 figs,axs=plt.subplots(figsize=(8,4))
@@ -614,7 +619,7 @@ with tab1:
             except Exception as e:
                 st.warning("SHAP attribution could not be computed for this input: "+str(e))
         else:
-            st.info("This deployment runs on Python 3.14, for which the SHAP library is not yet available. The domain-logic explainability above provides interpretable, plain-language reasoning for every prediction. SHAP-based attribution is discussed in the dissertation as a future extension.")
+            st.info("The domain-logic explainability above provides interpretable, plain-language reasoning for every prediction. SHAP-based attribution is discussed in the dissertation as a future extension.")
 
 with tab2:
     st.subheader("Barrier and Capability Gap Analysis")
@@ -952,8 +957,7 @@ with tab7:
                         if sample_rows:
                             Xs=np.array(sample_rows)
                             expl=shap.TreeExplainer(rf)
-                            svv=expl.shap_values(Xs)
-                            if isinstance(svv,list): svv=svv[1]
+                            svv=_shap_positive_class(expl.shap_values(Xs))
                             mean_abs=np.abs(svv).mean(axis=0)
                             imp=sorted(zip(feature_cols,mean_abs),key=lambda x:x[1],reverse=True)
                             figs,axs=plt.subplots(figsize=(9,4))
@@ -968,7 +972,7 @@ with tab7:
                     except Exception as e:
                         st.warning("Global SHAP summary unavailable: "+str(e))
         else:
-            st.info("This deployment runs on Python 3.14, for which SHAP is not yet available. The impurity-based feature importance (reported in the dissertation) and the domain-logic explainability remain fully available throughout the platform.")
+            st.info("The impurity-based feature importance (reported in the dissertation) and the domain-logic explainability remain fully available throughout the platform.")
         st.divider()
         st.markdown("### Policy Analysis Charts — Real UK SME Data")
         try:
