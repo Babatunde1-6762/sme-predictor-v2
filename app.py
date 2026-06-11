@@ -621,14 +621,19 @@ with tab1:
                 explainer=shap.TreeExplainer(rf)
                 sv=explainer.shap_values(row1)
                 if isinstance(sv,list):
-                    sv_use=sv[1][0]
+                    sv_use=sv[1][0] if len(sv)>1 else sv[0][0]
                 else:
-                    sv_use=sv[0]
-                contribs=sorted(zip(feature_cols,sv_use),key=lambda x:abs(x[1]),reverse=True)
+                    sv_arr=np.asarray(sv)
+                    if sv_arr.ndim==3:
+                        sv_use=sv_arr[0,:,1] if sv_arr.shape[2]>1 else sv_arr[0,:,0]
+                    else:
+                        sv_use=sv_arr[0]
+                sv_use=np.asarray(sv_use).ravel()
+                contribs=sorted(zip(feature_cols,sv_use),key=lambda x:abs(float(x[1])),reverse=True)
                 st.caption("SHAP values show how each feature pushed this specific prediction above or below the baseline. Positive values increase predicted SME win probability; negative values decrease it.")
                 figs,axs=plt.subplots(figsize=(8,4))
                 names=[c[0] for c in contribs[:8]][::-1]
-                vals=[c[1] for c in contribs[:8]][::-1]
+                vals=[float(c[1]) for c in contribs[:8]][::-1]
                 colors=["#16a34a" if v>=0 else "#dc2626" for v in vals]
                 axs.barh(names,vals,color=colors)
                 axs.set_xlabel("SHAP value (impact on SME win probability)")
@@ -639,6 +644,7 @@ with tab1:
                 plt.close(figs)
                 st.markdown("**Plain-language reading:**")
                 for fname,fval in contribs[:5]:
+                    fval=float(fval)
                     direction="increased" if fval>=0 else "decreased"
                     st.markdown("- **"+fname+"** "+direction+" the predicted win probability (SHAP "+"{:+.3f}".format(fval)+")")
             except Exception as e:
@@ -991,7 +997,11 @@ with tab7:
                             Xs=np.array(sample_rows)
                             expl=shap.TreeExplainer(rf)
                             svv=expl.shap_values(Xs)
-                            if isinstance(svv,list): svv=svv[1]
+                            if isinstance(svv,list):
+                                svv=svv[1] if len(svv)>1 else svv[0]
+                            svv=np.asarray(svv)
+                            if svv.ndim==3:
+                                svv=svv[:,:,1] if svv.shape[2]>1 else svv[:,:,0]
                             mean_abs=np.abs(svv).mean(axis=0)
                             imp=sorted(zip(feature_cols,mean_abs),key=lambda x:x[1],reverse=True)
                             figs,axs=plt.subplots(figsize=(9,4))
