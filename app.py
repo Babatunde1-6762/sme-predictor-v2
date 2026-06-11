@@ -15,14 +15,6 @@ try:
 except Exception:
     SHAP_AVAILABLE = False
 
-def _shap_positive_class(sv):
-    if isinstance(sv, list):
-        return np.asarray(sv[1] if len(sv) > 1 else sv[0])
-    sv = np.asarray(sv)
-    if sv.ndim == 3:
-        return sv[:, :, 1] if sv.shape[2] > 1 else sv[:, :, 0]
-    return sv
-
 CPV_LOOKUP = {
     "45000000":"Construction","45100000":"Site preparation work",
     "45200000":"Building construction","45300000":"Building installation works",
@@ -74,6 +66,28 @@ def cpv_to_industry(cpv):
     if s[:4]+"0000" in CPV_LOOKUP: return CPV_LOOKUP[s[:4]+"0000"]
     if s[:2]+"000000" in CPV_LOOKUP: return CPV_LOOKUP[s[:2]+"000000"]
     return "Unknown industry"
+
+def smart_cpv_rate(cpv, rates):
+    """Return SME rate for a CPV code. If exact code is absent, average the
+    known rates of all CPV codes in the same industry; if still none, use the
+    nearest-prefix match; only then fall back to the global rate. This avoids
+    every unknown code collapsing to the global 50.2% value."""
+    cpv_rates = rates.get("cpv_sme_rate", {})
+    s = str(cpv).split(".")[0].strip()
+    if s in cpv_rates:
+        return cpv_rates[s], "exact"
+    industry = cpv_to_industry(s)
+    if industry != "Unknown industry":
+        members = INDUSTRY_LOOKUP.get(industry, [])
+        present = [cpv_rates[c] for c in members if c in cpv_rates]
+        if present:
+            return sum(present) / len(present), "industry-average"
+    for cut in [6, 4, 2]:
+        prefix = s[:cut]
+        matches = [v for k, v in cpv_rates.items() if str(k).startswith(prefix)]
+        if matches:
+            return sum(matches) / len(matches), "prefix-match"
+    return rates.get("global_sme_rate", 0.0), "global-fallback"
 
 UNIVERSAL_CERTS = [
     {"name":"Cyber Essentials","type":"Mandatory","issuer":"NCSC / IASME","cost":"£300 - £500","timeline":"1-2 weeks","required_by":"All UK government contracts involving IT or data (PPN 014)","why":"Mandatory baseline for all public sector contracts involving technology or personal data.","url":"https://www.ncsc.gov.uk/cyberessentials/overview"},
@@ -539,6 +553,7 @@ st.title("AI-Driven SME Procurement Accessibility Intelligence Platform")
 st.markdown("Explainable AI revealing structural barriers affecting SME participation in UK public procurement.")
 if best_auc:
     st.success("Best model: "+best_label+"  |  AUC-ROC: "+"{:.4f}".format(best_auc))
+st.info("Important: all SME award rates in this platform are measured by **contract count** (the share of individual contracts won by SMEs), not by **contract value**. SMEs win roughly half of contracts by number because most public contracts are small, but a much smaller share of total spend by value (national research reports around 21% of central-government spend and around 35% of local-government spend). The two figures are not contradictory: they measure different things.")
 st.divider()
 
 tab1,tab2,tab3,tab4,tab5,tab6,tab7,tab8=st.tabs([
@@ -554,6 +569,7 @@ with tab1:
         cv1=st.number_input("Contract value (£)",min_value=0.0,value=50000.0,step=1000.0,key="cv1")
         am1=st.selectbox("Award month",list(range(1,13)),format_func=lambda m:["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][m-1],key="am1")
         aq1=st.selectbox("Award quarter",[1,2,3,4],format_func=lambda q:"Q"+str(q),key="aq1")
+        st.caption("Timing features have low predictive weight and are included only for completeness. They should not be used to decide when to bid \u2014 avoiding a month because of a marginally lower historical rate would be adverse behaviour, not sound strategy.")
         mc=st.selectbox("Model",model_options,index=default_index,key="mc1")
     with c2:
         r1=st.selectbox("Region",list(encoders.get("region",{"Unknown":0}).keys()),key="r1")
@@ -580,10 +596,14 @@ with tab1:
         else: st.error("Low win probability. This confirms why SMEs in this category hesitate to apply. See Barrier and Gap Analysis tab.")
         st.divider()
         st.markdown("### Explainability — Why is this the prediction?")
-        for rname,rexpl,rdir in explain_prediction(p_ens1,cv1,cp1,r1,rates):
+        _reasons1=explain_prediction(p_ens1,cv1,cp1,r1,rates)
+        _has_neg=any(d=="negative" for _,_,d in _reasons1)
+        for rname,rexpl,rdir in _reasons1:
             if rdir=="negative": st.error("**"+rname+":** "+rexpl)
             elif rdir=="positive": st.success("**"+rname+":** "+rexpl)
             else: st.info("**"+rname+":** "+rexpl)
+        if _has_neg and p_ens1>=0.6:
+            st.warning("Note: although a high contract value is listed as a barrier, the overall win probability remains high here. This is because the model is driven principally by the historical sector and regional SME award rates (which together account for the majority of predictive power), and those structural factors are favourable in this case. Contract value is one influence among several, not an absolute ceiling.")
         st.divider()
         st.markdown("**Individual model contributions:**")
         col1,col2,col3,col4=st.columns(4)
@@ -592,13 +612,18 @@ with tab1:
         col3.metric("Logistic Reg (15%)","{:.1f}%".format(p_lr1*100))
         col4.metric("Ensemble","{:.1f}%".format(p_ens1*100))
         st.info("Industry: "+cpv_to_industry(cp1)+"  |  Sector SME rate: "+"{:.1f}%".format(cr1*100)+"  |  Region SME rate: "+"{:.1f}%".format(rr1*100))
+        if rr1<=0.02 or rr1>=0.98:
+            st.caption("Caution: the selected region has an extreme historical SME rate ("+"{:.1f}%".format(rr1*100)+"). This usually indicates very few contracts were recorded for this region in the training data, so the regional figure is statistically unreliable and should be interpreted with care.")
         st.divider()
         st.markdown("### SHAP Feature Attribution")
         if SHAP_AVAILABLE:
             try:
                 explainer=shap.TreeExplainer(rf)
                 sv=explainer.shap_values(row1)
-                sv_use=np.asarray(_shap_positive_class(sv))[0]
+                if isinstance(sv,list):
+                    sv_use=sv[1][0]
+                else:
+                    sv_use=sv[0]
                 contribs=sorted(zip(feature_cols,sv_use),key=lambda x:abs(x[1]),reverse=True)
                 st.caption("SHAP values show how each feature pushed this specific prediction above or below the baseline. Positive values increase predicted SME win probability; negative values decrease it.")
                 figs,axs=plt.subplots(figsize=(8,4))
@@ -619,7 +644,7 @@ with tab1:
             except Exception as e:
                 st.warning("SHAP attribution could not be computed for this input: "+str(e))
         else:
-            st.info("The domain-logic explainability above provides interpretable, plain-language reasoning for every prediction. SHAP-based attribution is discussed in the dissertation as a future extension.")
+            st.info("This deployment runs on Python 3.14, for which the SHAP library is not yet available. The domain-logic explainability above provides interpretable, plain-language reasoning for every prediction. SHAP-based attribution is discussed in the dissertation as a future extension.")
 
 with tab2:
     st.subheader("Barrier and Capability Gap Analysis")
@@ -644,7 +669,7 @@ with tab2:
         col3.metric("SME Confidence Index","{:.1f}%".format(conf2))
         col4.metric("Bid Feasibility","{:.2f}".format(bid2))
         st.progress(float(base_prob))
-        if base_prob<0.3: st.error("Only "+"{:.1f}%".format(base_prob*100)+"% — structural participation barrier confirmed.")
+        if base_prob<0.3: st.error("Only "+"{:.1f}%".format(base_prob*100)+"% predicted (by contract count). This is consistent with a structural participation barrier in this segment.")
         elif base_prob<0.5: st.warning("{:.1f}%".format(base_prob*100)+"% — below threshold. Bid costs outweigh expected return.")
         else: st.success("{:.1f}%".format(base_prob*100)+"% — SMEs should be encouraged to apply.")
         st.divider()
@@ -663,8 +688,8 @@ with tab2:
         st.divider()
         st.markdown("### Why are SMEs not applying? — Model Evidence")
         st.markdown("For a **"+cpv_to_industry(cp2)+"** contract worth **£"+"{:,.0f}".format(cv2)+"** in **"+r2+"**:")
-        if base_prob<0.3: st.error("With less than 30% probability, SME reluctance is rational. Bid preparation costs cannot be justified at this level.")
-        elif base_prob<0.5: st.warning("At 30-50%, bid costs often outweigh expected returns. SMEs are making a rational economic calculation.")
+        if base_prob<0.3: st.error("With less than 30% predicted probability, the expected return from bidding may not justify bid preparation costs \u2014 a pattern consistent with rational non-participation. Note the model predicts outcomes, not actual bidding decisions.")
+        elif base_prob<0.5: st.warning("At 30-50% predicted probability, bid costs may outweigh expected returns for some contracts. This is consistent with, but does not by itself prove, rational non-participation.")
         else: st.success("Above 50% — SMEs in this category should be actively encouraged to apply.")
 
 with tab3:
@@ -703,10 +728,18 @@ with tab4:
             if ir=="Unknown industry": st.warning("No industry found for: "+cpv_input)
             else:
                 st.success(cpv_input+" belongs to: "+ir)
-                sr=rates["cpv_sme_rate"].get(str(cpv_input.strip()),rates["global_sme_rate"])
-                st.metric("Historical SME award rate","{:.1f}%".format(sr*100))
+                sr,match_q=smart_cpv_rate(cpv_input.strip(),rates)
+                st.metric("Historical SME award rate (by contract count)","{:.1f}%".format(sr*100))
+                if match_q=="exact":
+                    st.caption("Exact match: this rate is computed directly from contracts in this CPV code.")
+                elif match_q=="industry-average":
+                    st.caption("This exact CPV code was not in the training data, so the rate shown is the average across known codes in the "+ir+" industry.")
+                elif match_q=="prefix-match":
+                    st.caption("Approximate rate based on related CPV codes sharing the same prefix.")
+                else:
+                    st.caption("No related codes in the data; showing the global average. Interpret with caution.")
                 related=INDUSTRY_LOOKUP.get(ir,[])
-                rr2={c:rates["cpv_sme_rate"].get(c,rates["global_sme_rate"]) for c in related}
+                rr2={c:smart_cpv_rate(c,rates)[0] for c in related}
                 st.dataframe(pd.DataFrame({
                     "CPV Code":related,"Industry":[ir]*len(related),"SME Rate":["{:.1f}%".format(rr2[c]*100) for c in related]
                 }),use_container_width=True)
@@ -716,7 +749,7 @@ with tab4:
         if industry_input:
             cpv_list=INDUSTRY_LOOKUP.get(industry_input,[])
             st.success(industry_input+" contains "+str(len(cpv_list))+" CPV code(s)")
-            rs2={c:rates["cpv_sme_rate"].get(c,rates["global_sme_rate"]) for c in cpv_list}
+            rs2={c:smart_cpv_rate(c,rates)[0] for c in cpv_list}
             st.dataframe(pd.DataFrame({
                 "CPV Code":cpv_list,"Historical SME Rate":["{:.1f}%".format(rs2[c]*100) for c in cpv_list]
             }),use_container_width=True)
@@ -783,7 +816,7 @@ with tab6:
         st.markdown("#### SME Organisational Characteristics")
         col1,col2,col3=st.columns(3)
         with col1:
-            sme_name=st.text_input("SME name",value="My SME",key="sme_name")
+            sme_name=st.text_input("SME name (label only, not used in prediction)",value="My SME",key="sme_name")
             sme_turnover=st.number_input("Annual turnover (£)",min_value=0.0,value=200000.0,step=10000.0,key="sme_turn")
         with col2:
             sme_years=st.number_input("Years active",min_value=0,value=3,step=1,key="sme_years")
@@ -886,7 +919,7 @@ with tab7:
     st.markdown("### Key Research Findings")
     col_f1,col_f2,col_f3=st.columns(3)
     with col_f1:
-        st.error("Finding 1 — Structural Barrier: "+"{:.0f}%".format(f1_pct)+" of regions show SME award rates below 50%, confirming that low win probability is a rational reason for non-participation.")
+        st.error("Finding 1 — Structural Barrier: "+"{:.0f}%".format(f1_pct)+" of regions show SME award rates below 50%, consistent with low predicted win probability being a contributing factor in SME non-participation.")
     with col_f2:
         st.warning("Finding 2 — Sector Inequality: Gap between most accessible sector ("+f2_best["Industry"]+": "+"{:.1f}%".format(f2_best["Rate"]*100)+") and least ("+f2_worst["Industry"]+": "+"{:.1f}%".format(f2_worst["Rate"]*100)+") confirms structural imbalance.")
     with col_f3:
@@ -957,7 +990,8 @@ with tab7:
                         if sample_rows:
                             Xs=np.array(sample_rows)
                             expl=shap.TreeExplainer(rf)
-                            svv=_shap_positive_class(expl.shap_values(Xs))
+                            svv=expl.shap_values(Xs)
+                            if isinstance(svv,list): svv=svv[1]
                             mean_abs=np.abs(svv).mean(axis=0)
                             imp=sorted(zip(feature_cols,mean_abs),key=lambda x:x[1],reverse=True)
                             figs,axs=plt.subplots(figsize=(9,4))
@@ -972,7 +1006,7 @@ with tab7:
                     except Exception as e:
                         st.warning("Global SHAP summary unavailable: "+str(e))
         else:
-            st.info("The impurity-based feature importance (reported in the dissertation) and the domain-logic explainability remain fully available throughout the platform.")
+            st.info("This deployment runs on Python 3.14, for which SHAP is not yet available. The impurity-based feature importance (reported in the dissertation) and the domain-logic explainability remain fully available throughout the platform.")
         st.divider()
         st.markdown("### Policy Analysis Charts — Real UK SME Data")
         try:
@@ -1113,8 +1147,11 @@ with st.sidebar:
     if best_auc:
         st.success("Best model: "+best_label+"\nAUC-ROC: "+"{:.4f}".format(best_auc))
     st.divider()
+    st.markdown("**SME definition (Procurement Act 2023):**")
+    st.caption("Fewer than 250 employees AND turnover not exceeding £44m, or balance sheet total not exceeding £38m. Source: gov.uk procurement guidance.")
+    st.divider()
     st.markdown("**Research framing:**")
-    st.caption("Explainable AI for understanding SME participation barriers in UK public procurement")
+    st.caption("Explainable AI for understanding SME participation barriers in UK public procurement. SME award rates are measured by contract count, not contract value.")
     st.divider()
     st.markdown("**Data sources:**")
     st.markdown("- UK Contracts Finder API")
