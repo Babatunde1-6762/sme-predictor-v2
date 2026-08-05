@@ -618,8 +618,9 @@ with tab1:
         st.markdown("### SHAP Feature Attribution")
         if SHAP_AVAILABLE:
             try:
-                explainer=shap.TreeExplainer(rf)
+                explainer=shap.TreeExplainer(xgb)
                 sv=explainer.shap_values(row1)
+                st.caption("Computed live for: £"+"{:,.0f}".format(cv1)+" | "+r1+" | CPV "+cp1)
                 if isinstance(sv,list):
                     sv_use=sv[1][0] if len(sv)>1 else sv[0][0]
                 else:
@@ -637,7 +638,7 @@ with tab1:
                 colors=["#16a34a" if v>=0 else "#dc2626" for v in vals]
                 axs.barh(names,vals,color=colors)
                 axs.set_xlabel("SHAP value (impact on SME win probability)")
-                axs.set_title("Top feature contributions to this prediction (Random Forest)")
+                axs.set_title("Top feature contributions to this prediction (XGBoost)")
                 axs.axvline(0,color="#1a1a2e",linewidth=0.8)
                 plt.tight_layout()
                 st.pyplot(figs)
